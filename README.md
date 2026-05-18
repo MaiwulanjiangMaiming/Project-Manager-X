@@ -1,15 +1,15 @@
-# Project Manager Pro
+# Project Manager X
 
 <p align="center">
-  <img src="resources/icon.png" alt="Project Manager Pro Logo" width="180"/>
+  <img src="resources/icon.png" alt="Project Manager X Logo" width="180"/>
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=MaiwulanjiangMaiming.project-manager-pro">
+  <a href="https://marketplace.visualstudio.com/items?itemName=MaiwulanjiangMaiming.project-manager-x">
     <img src="https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visual-studio-code" alt="VS Code Marketplace" height="24"/>
   </a>
-  <a href="https://open-vsx.org/extension/maiwulanjiangmaiming/project-manager-pro">
-    <img src="https://img.shields.io/open-vsx/v/maiwulanjiangmaiming/project-manager-pro?label=Open%20VSX&style=flat&color=2C2255&logo=open-vsx" alt="Open VSX Version" height="24"/>
+  <a href="https://open-vsx.org/extension/maiwulanjiangmaiming/project-manager-x">
+    <img src="https://img.shields.io/open-vsx/v/maiwulanjiangmaiming/project-manager-x?label=Open%20VSX&style=flat&color=2C2255&logo=open-vsx" alt="Open VSX Version" height="24"/>
   </a>
 </p>
 
@@ -35,11 +35,11 @@ A powerful VS Code extension for managing projects with tags, tasks, milestones,
 
 ### From VS Code Marketplace
 
-Search for **"Project Manager Pro"** in the Extensions view (`Cmd+Shift+X`)
+Search for **"Project Manager X"** in the Extensions view (`Cmd+Shift+X`)
 
 ### From VSIX File
 
-1. Download the `.vsix` file from [Releases](https://github.com/MaiwulanjiangMaiming/Project-Manager-Pro/releases)
+1. Download the `.vsix` file from [Releases](https://github.com/MaiwulanjiangMaiming/Project-Manager-X/releases)
 2. Open VS Code → Extensions (`Cmd+Shift+X`)
 3. Click "..." menu → **"Install from VSIX"**
 4. Select the downloaded file
@@ -47,7 +47,7 @@ Search for **"Project Manager Pro"** in the Extensions view (`Cmd+Shift+X`)
 ## Quick Start
 
 1. Open a workspace in VS Code
-2. Click **"Save Current Project"** in the Project Manager Pro sidebar
+2. Click **"Save Current Project"** in the Project Manager X sidebar
 3. Add tags to organize your projects
 4. Create tasks and milestones to track progress
 
@@ -94,7 +94,7 @@ Search for **"Project Manager Pro"** in the Extensions view (`Cmd+Shift+X`)
 ## Architecture
 
 ```
-Project-Manager-Pro/
+Project-Manager-X/
 ├── src/
 │   ├── extension.ts          # Main entry
 │   ├── core/                 # Core modules
@@ -130,7 +130,7 @@ Project-Manager-Pro/
 
 ## Contributing
 
-Contributions welcome! Please read our [contributing guidelines](https://github.com/MaiwulanjiangMaiming/Project-Manager-Pro/blob/main/CONTRIBUTING.md).
+Contributions welcome! Please read our [contributing guidelines](https://github.com/MaiwulanjiangMaiming/Project-Manager-X/blob/main/CONTRIBUTING.md).
 
 ## License
 
@@ -139,7 +139,7 @@ GPL-3.0 License
 ## Contact
 
 For feature requests or bug reports:
-- [GitHub Issues](https://github.com/MaiwulanjiangMaiming/Project-Manager-Pro/issues)
+- [GitHub Issues](https://github.com/MaiwulanjiangMaiming/Project-Manager-X/issues)
 - Email: mawlan.momin@gmail.com
 
 ---

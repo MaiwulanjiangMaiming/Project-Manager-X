@@ -1,5 +1,5 @@
 /**
- * Project Manager Pro
+ * Project Manager X
  * Copyright (c) 2026 Maiwulanjiang Maiming <mawlan.momin@gmail.com>
  * Licensed under GPL-3.0
  */

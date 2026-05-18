@@ -56,7 +56,7 @@ export function registerProjectCommands(ctx: vscode.ExtensionContext, container:
       }
 
       const tasks = container.projectManager.getTasks();
-      let markdown = '# Project Manager Pro - Export\n\n';
+      let markdown = '# Project Manager X - Export\n\n';
 
       for (const project of projects) {
         markdown += `## ${project.name}\n`;

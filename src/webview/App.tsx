@@ -1,5 +1,5 @@
 /**
- * Project Manager Pro
+ * Project Manager X
  * Copyright (c) 2026 Maiwulanjiang Maiming <mawlan.momin@gmail.com>
  * Licensed under GPL-3.0
  */
@@ -505,7 +505,7 @@ export default function App() {
           {showSettingsPanel && (
             <div className="settings-panel">
               <div className="settings-panel-header">
-                <span>Project Manager Pro</span>
+                <span>Project Manager X</span>
                 <button className="settings-panel-close" onClick={() => setShowSettingsPanel(false)}>
                   <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
                     <path d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM11.71 10.29L10.29 11.71L8 9.41L5.71 11.71L4.29 10.29L6.59 8L4.29 5.71L5.71 4.29L8 6.59L10.29 4.29L11.71 5.71L9.41 8L11.71 10.29Z"/>

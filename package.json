@@ -1,6 +1,6 @@
 {
-  "name": "project-manager-pro-mw",
-  "displayName": "Project Manager Pro",
+  "name": "project-manager-x",
+  "displayName": "Project Manager X",
   "description": "Modern project manager with drag-and-drop, tags, and beautiful UI",
   "version": "1.0.0",
   "publisher": "MaiwulanjiangMaiming",
@@ -9,13 +9,13 @@
     "email": "mawlan.momin@gmail.com"
   },
   "license": "GPL-3.0",
-  "homepage": "https://github.com/MaiwulanjiangMaiming/Project-Manager-Pro",
+  "homepage": "https://github.com/MaiwulanjiangMaiming/Project-Manager-X",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MaiwulanjiangMaiming/Project-Manager-Pro.git"
+    "url": "https://github.com/MaiwulanjiangMaiming/Project-Manager-X.git"
   },
   "bugs": {
-    "url": "https://github.com/MaiwulanjiangMaiming/Project-Manager-Pro/issues"
+    "url": "https://github.com/MaiwulanjiangMaiming/Project-Manager-X/issues"
   },
   "icon": "resources/icon.png",
   "engines": {
@@ -44,7 +44,7 @@
       "activitybar": [
         {
           "id": "project-manager-pro",
-          "title": "Project Manager Pro",
+          "title": "Project Manager X",
           "icon": "$(folder-opened)"
         }
       ]
@@ -137,7 +137,7 @@
       ]
     },
     "configuration": {
-      "title": "Project Manager Pro",
+      "title": "Project Manager X",
       "properties": {
         "projectManagerPro.projectsLocation": {
           "type": "string",

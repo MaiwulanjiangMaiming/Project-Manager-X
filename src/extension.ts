@@ -1,5 +1,5 @@
 /**
- * Project Manager Pro
+ * Project Manager X
  * Copyright (c) 2026 Maiwulanjiang Maiming <mawlan.momin@gmail.com>
  * Licensed under GPL-3.0
  */
@@ -347,7 +347,7 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';">
-  <title>Project Manager Pro</title>
+  <title>Project Manager X</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
