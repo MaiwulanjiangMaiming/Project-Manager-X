@@ -1,0 +1,174 @@
+{
+  "name": "project-manager-pro",
+  "displayName": "Project Manager Pro",
+  "description": "Modern project manager with drag-and-drop, tags, and beautiful UI",
+  "version": "1.0.0",
+  "publisher": "custom",
+  "engines": {
+    "vscode": "^1.78.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "project",
+    "manager",
+    "workspace",
+    "folder",
+    "git"
+  ],
+  "activationEvents": [
+    "onView:projectManagerPro",
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "project-manager-pro",
+          "title": "Project Manager Pro",
+          "icon": "$(folder-opened)"
+        }
+      ]
+    },
+    "views": {
+      "project-manager-pro": [
+        {
+          "id": "projectManagerPro",
+          "name": "Projects",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "projectManagerPro.saveProject",
+        "title": "Save Project",
+        "icon": "$(save)"
+      },
+      {
+        "command": "projectManagerPro.refreshProjects",
+        "title": "Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "projectManagerPro.addDetectFolder",
+        "title": "Add Detect Folder",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "projectManagerPro.editProjectsFile",
+        "title": "Edit Projects File",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "projectManagerPro.importFromProjectManager",
+        "title": "Import from Project Manager",
+        "icon": "$(repo-clone)"
+      },
+      {
+        "command": "projectManagerPro.quickSwitch",
+        "title": "Quick Switch Project",
+        "icon": "$(search)"
+      },
+      {
+        "command": "projectManagerPro.autoMatchWorkspace",
+        "title": "Auto Match Workspace",
+        "icon": "$(link)"
+      },
+      {
+        "command": "projectManagerPro.exportProjects",
+        "title": "Export Projects to Markdown",
+        "icon": "$(export)"
+      },
+      {
+        "command": "projectManagerPro.restoreBackup",
+        "title": "Restore from Backup",
+        "icon": "$(history)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "projectManagerPro.saveProject"
+        },
+        {
+          "command": "projectManagerPro.refreshProjects"
+        },
+        {
+          "command": "projectManagerPro.addDetectFolder"
+        },
+        {
+          "command": "projectManagerPro.editProjectsFile"
+        },
+        {
+          "command": "projectManagerPro.importFromProjectManager"
+        },
+        {
+          "command": "projectManagerPro.quickSwitch"
+        },
+        {
+          "command": "projectManagerPro.autoMatchWorkspace"
+        },
+        {
+          "command": "projectManagerPro.exportProjects"
+        },
+        {
+          "command": "projectManagerPro.restoreBackup"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Project Manager Pro",
+      "properties": {
+        "projectManagerPro.projectsLocation": {
+          "type": "string",
+          "default": "",
+          "description": "Custom location for projects.json file. Leave empty to use default (~/.project-manager-pro/). Supports ~ for home directory."
+        },
+        "projectManagerPro.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect projects in configured folders"
+        },
+        "projectManagerPro.showGitStatus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show git status indicators for projects"
+        },
+        "projectManagerPro.compactView": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use compact view for project cards"
+        },
+        "projectManagerPro.enableReminders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable task due date reminders"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.js",
+    "build:dev": "node build.js --dev",
+    "watch": "node build.js --watch",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/vscode": "^1.78.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "nanoid": "^5.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zod": "^3.23.0",
+    "zustand": "^5.0.13"
+  }
+}
