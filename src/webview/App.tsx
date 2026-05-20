@@ -611,7 +611,7 @@ export default function App() {
                 <div className="settings-panel-body">
                   <div className="settings-item">
                     <span className="settings-label">Version</span>
-                    <span className="settings-value">1.0.0</span>
+                    <span className="settings-value">1.0.1</span>
                   </div>
                   <div className="settings-item">
                     <span className="settings-label">GitHub</span>
