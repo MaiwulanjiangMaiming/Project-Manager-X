@@ -1,40 +1,50 @@
-interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (reason: any) => void;
+import { RpcError } from './RpcError';
+
+interface PendingRequest<T = unknown> {
+  resolve: (value: T) => void;
+  reject: (reason: Error) => void;
 }
 
 class WebviewRPC {
   private pending = new Map<string, PendingRequest>();
-  private vscode: any;
+  private vscode: { postMessage: (msg: unknown) => void };
 
-  constructor(vscodeApi: any) {
+  constructor(vscodeApi: { postMessage: (msg: unknown) => void }) {
     this.vscode = vscodeApi;
   }
 
-  send(type: string, data?: any): void {
+  send(type: string, data?: Record<string, unknown>): void {
     this.vscode.postMessage({ type, data });
   }
 
-  async call(type: string, data?: any, timeout = 5000): Promise<any> {
+  async call<T = unknown>(
+    type: string,
+    data?: Record<string, unknown>,
+    timeout = 5000
+  ): Promise<T> {
     const id = Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
-    return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+    return new Promise<T>((resolve, reject) => {
+      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
       this.vscode.postMessage({ type, data, _rpcId: id });
       setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
-          reject(new Error(`RPC timeout: ${type}`));
+          reject(RpcError.timeout(type));
         }
       }, timeout);
     });
   }
 
-  handleResponse(id: string, result?: any, error?: string): void {
+  handleResponse(
+    id: string,
+    result?: unknown,
+    error?: { code: string; message: string; details?: Record<string, unknown> }
+  ): void {
     const pending = this.pending.get(id);
     if (!pending) return;
     this.pending.delete(id);
     if (error) {
-      pending.reject(new Error(error));
+      pending.reject(new RpcError(error.code, error.message, error.details));
     } else {
       pending.resolve(result);
     }

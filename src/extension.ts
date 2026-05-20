@@ -7,7 +7,24 @@
 import * as vscode from 'vscode';
 import { Container } from './core/container';
 import { registerAllCommands } from './commands';
-import { WebviewMessage, ExtensionToWebview, Project, Task } from './types';
+import { WebviewMessage, ExtensionToWebview, Project, Task, ContextSnapshot } from './types';
+import { RpcError } from './webview/rpc/RpcError';
+
+interface RpcSuccessResponse {
+  _rpcSuccess: true;
+  data: unknown;
+}
+
+interface RpcErrorResponse {
+  _rpcError: true;
+  error: {
+    code: string;
+    message: string;
+    details?: Record<string, unknown>;
+  };
+}
+
+type RpcResponse = RpcSuccessResponse | RpcErrorResponse;
 
 class MessageQueue {
   private queue: ExtensionToWebview[] = [];
@@ -42,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
   container = Container.init(context);
   container.storage.setBackupManager(container.backupManager);
 
-  const provider = new ProjectManagerWebviewProvider(context.extensionUri, container);
+  const provider = new ProjectManagerWebviewProvider(context.extensionUri, container, context);
 
   const projectsFilePath = container.projectManager.getProjectsFilePath();
   const watcher = vscode.workspace.createFileSystemWatcher(projectsFilePath);
@@ -64,7 +81,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('projectManagerPro', provider, {
-      webviewOptions: { retainContextWhenHidden: true }
+      webviewOptions: { retainContextWhenHidden: true },
     })
   );
 
@@ -82,12 +99,13 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly container: Container
+    private readonly container: Container,
+    private readonly context: vscode.ExtensionContext
   ) {}
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
-    context: vscode.WebviewViewResolveContext,
+    _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken
   ) {
     this.view = webviewView;
@@ -95,7 +113,7 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this.extensionUri]
+      localResourceRoots: [this.extensionUri],
     };
 
     webviewView.webview.html = this.getHtml(webviewView.webview);
@@ -111,7 +129,7 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         messageQueue.enqueue({
           type: 'rpc:response',
           data: response,
-          id: message.id
+          id: message.id,
         });
       }
     });
@@ -121,9 +139,52 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         this.refresh();
       }
     });
+
+    // Listen for VS Code theme changes
+    const themeChangeDisposable = vscode.window.onDidChangeActiveColorTheme((theme) => {
+      messageQueue.enqueue({
+        type: 'themeChange',
+        data: {
+          kind: theme.kind,
+          // 1 = dark, 2 = light, 3 = high contrast dark, 4 = high contrast light
+        },
+      });
+    });
+    this.context.subscriptions.push(themeChangeDisposable);
+
+    // Send initial theme
+    messageQueue.enqueue({
+      type: 'themeChange',
+      data: {
+        kind: vscode.window.activeColorTheme.kind,
+      },
+    });
   }
 
-  async handleMessage(message: WebviewMessage): Promise<any> {
+  async handleMessage(message: WebviewMessage): Promise<RpcResponse | undefined> {
+    try {
+      const result = await this.handleMessageInner(message);
+      if (message.id) {
+        return { _rpcSuccess: true, data: result };
+      }
+      return undefined;
+    } catch (error) {
+      if (message.id) {
+        const rpcError = error instanceof RpcError ? error : RpcError.unknown(String(error));
+        return {
+          _rpcError: true,
+          error: {
+            code: rpcError.code,
+            message: rpcError.message,
+            details: rpcError.details,
+          },
+        };
+      }
+      throw error;
+    }
+  }
+
+  private async handleMessageInner(message: WebviewMessage): Promise<unknown> {
     const pm = this.container.projectManager;
     switch (message.type) {
       case 'openProject':
@@ -134,20 +195,45 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         await pm.openProject(message.data.projectId, true);
         this.refresh();
         break;
-      case 'saveProject':
-        await pm.saveCurrentProject();
+      case 'saveProject': {
+        const projectName = await pm.saveCurrentProject();
+        if (projectName) {
+          vscode.window.showInformationMessage(`Project "${projectName}" saved`);
+        }
         this.refresh();
         break;
-      case 'deleteProject':
+      }
+      case 'deleteProject': {
+        const project = pm.getProjects().find((p) => p.id === message.data.projectId);
+        if (!project) {
+          throw RpcError.notFound('Project', message.data.projectId);
+        }
+
+        const projectData = { ...project };
+        const projectTasks = pm.getTasks(message.data.projectId);
+
         await pm.deleteProject(message.data.projectId);
         this.refresh();
+
+        const undo = await vscode.window.showInformationMessage(
+          `Project "${projectData.name}" deleted`,
+          'Undo'
+        );
+        if (undo === 'Undo') {
+          await pm.restoreProject(projectData, projectTasks);
+          this.refresh();
+          vscode.window.showInformationMessage(`Project "${projectData.name}" restored`);
+        }
         break;
+      }
       case 'updateProject':
         await pm.updateProject(message.data.project);
+        vscode.window.showInformationMessage('Project updated');
         this.refresh();
         break;
       case 'reorderProjects':
         await pm.reorderProjects(message.data.projects);
+        vscode.window.showInformationMessage('Projects reordered');
         this.refresh();
         break;
       case 'moveProjectToTag':
@@ -160,14 +246,17 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         break;
       case 'addTag':
         await pm.addTag(message.data.name, message.data.color);
+        vscode.window.showInformationMessage(`Tag "${message.data.name}" added`);
         this.refresh();
         break;
       case 'updateTag':
         await pm.updateTag(message.data.tag);
+        vscode.window.showInformationMessage('Tag updated');
         this.refresh();
         break;
       case 'deleteTag':
         await pm.deleteTag(message.data.tagId);
+        vscode.window.showInformationMessage('Tag deleted');
         this.refresh();
         break;
       case 'reorderTags':
@@ -180,35 +269,68 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
       case 'addToWorkspace':
         await pm.addToWorkspace(message.data.projectId);
         break;
-      case 'refreshProjects':
-        await pm.refreshProjects();
+      case 'refreshProjects': {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Refreshing projects...',
+            cancellable: false,
+          },
+          async () => {
+            await pm.refreshProjects();
+          }
+        );
         this.refresh();
         break;
+      }
       case 'addDetectFolder':
         await pm.addDetectFolder();
         break;
       case 'editProjectsFile':
         await pm.editProjectsFile();
         break;
-      case 'importFromProjectManager':
-        await pm.importFromProjectManager();
+      case 'importFromProjectManager': {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: 'Importing projects...',
+            cancellable: false,
+          },
+          async () => {
+            await pm.importFromProjectManager();
+          }
+        );
         this.refresh();
         break;
+      }
       case 'createTask':
-        await pm.createTask(message.data.projectId, message.data.title, message.data.category, message.data.priority);
+        await pm.createTask(
+          message.data.projectId,
+          message.data.title,
+          message.data.category,
+          message.data.priority
+        );
+        vscode.window.showInformationMessage('Task created');
         this.refresh();
         break;
       case 'updateTask':
         await pm.updateTask(message.data.task);
+        vscode.window.showInformationMessage('Task updated');
         this.refresh();
         this.container.reminderSystem.refreshReminders(pm.getStorageData().tasks);
         break;
       case 'deleteTask':
         await pm.deleteTask(message.data.taskId);
+        vscode.window.showInformationMessage('Task deleted');
         this.refresh();
         break;
       case 'createMilestone':
-        await pm.createMilestone(message.data.projectId, message.data.title, message.data.description);
+        await pm.createMilestone(
+          message.data.projectId,
+          message.data.title,
+          message.data.description
+        );
+        vscode.window.showInformationMessage('Milestone created');
         this.refresh();
         break;
       case 'updateMilestone':
@@ -220,7 +342,11 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         this.refresh();
         break;
       case 'createChangelog':
-        await pm.createChangelog(message.data.projectId, message.data.version, message.data.changes);
+        await pm.createChangelog(
+          message.data.projectId,
+          message.data.version,
+          message.data.changes
+        );
         this.refresh();
         break;
       case 'updateChangelog':
@@ -233,6 +359,7 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         break;
       case 'createNote':
         await pm.createNote(message.data.projectId, message.data.title, message.data.content);
+        vscode.window.showInformationMessage('Note created');
         this.refresh();
         break;
       case 'updateNote':
@@ -250,7 +377,10 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
       case 'getLatestSnapshot':
         return this.handleGetLatestSnapshot(message.data.projectId);
       case 'openProjectDetail':
-        await vscode.commands.executeCommand('projectManagerPro.openProjectDetail', message.data.projectId);
+        await vscode.commands.executeCommand(
+          'projectManagerPro.openProjectDetail',
+          message.data.projectId
+        );
         break;
       case 'showGlobalTasks':
         await vscode.commands.executeCommand('projectManagerPro.showGlobalTasks');
@@ -271,7 +401,17 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
           'Delete'
         );
         if (confirm === 'Delete') {
-          await pm.batchDeleteProjects(message.data.projectIds);
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `Deleting ${count} project${count !== 1 ? 's' : ''}...`,
+              cancellable: false,
+            },
+            async () => {
+              await pm.batchDeleteProjects(message.data.projectIds);
+            }
+          );
+          vscode.window.showInformationMessage(`Deleted ${count} project${count !== 1 ? 's' : ''}`);
           this.refresh();
         }
         break;
@@ -294,12 +434,17 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand('projectManagerPro.restoreBackup');
         break;
       case 'error:report':
-        vscode.window.showErrorMessage(`Webview error: ${message.data?.message || 'Unknown error'}`);
+        vscode.window.showErrorMessage(
+          `Webview error: ${message.data?.message || 'Unknown error'}`
+        );
         break;
     }
   }
 
-  private handleGetLatestSnapshot(projectId: string): any {
+  private handleGetLatestSnapshot(projectId: string): {
+    projectId: string;
+    snapshot: ContextSnapshot | undefined;
+  } {
     const snapshot = this.container.projectManager.getLatestSnapshot(projectId);
     return { projectId, snapshot };
   }
@@ -317,8 +462,8 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         snapshots: data.snapshots,
         notes: data.notes,
         tags: data.tags,
-        settings: data.settings
-      }
+        settings: data.settings,
+      },
     });
 
     const workspaceFolders = vscode.workspace.workspaceFolders;

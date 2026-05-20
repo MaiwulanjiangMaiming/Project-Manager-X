@@ -10,12 +10,49 @@ import * as path from 'path';
 import * as os from 'os';
 import { z } from 'zod';
 import {
-  StorageData, Project, Tag, Settings,
-  Task, Milestone, ChangelogEntry, ContextSnapshot, Note,
-  DEFAULT_SETTINGS, DEFAULT_TAGS, DATA_VERSION
+  StorageData,
+  Project,
+  ProjectType,
+  ProjectLifecycle,
+  Tag,
+  Settings,
+  Task,
+  Milestone,
+  ChangelogEntry,
+  ContextSnapshot,
+  Note,
+  DEFAULT_SETTINGS,
+  DEFAULT_TAGS,
+  DATA_VERSION,
 } from '../types';
 import { runMigrations } from './migrations';
 import { BackupManager } from './backup';
+
+interface RawProject {
+  id?: string;
+  name?: string;
+  path?: string;
+  rootPath?: string;
+  tags?: string[];
+  enabled?: boolean;
+  lastOpened?: number;
+  type?: string;
+  lifecycle?: string;
+  lifecycleOverride?: string;
+  remote?: Project['remote'];
+  health?: Project['health'];
+}
+
+interface StoredMetadata {
+  tasks?: Task[];
+  milestones?: Milestone[];
+  changelog?: ChangelogEntry[];
+  snapshots?: ContextSnapshot[];
+  notes?: Note[];
+  tags?: Tag[];
+  settings?: Settings;
+  dataVersion?: number;
+}
 
 const STORAGE_KEY = 'projectManagerPro';
 const PROJECTS_FILE = 'projects.json';
@@ -32,7 +69,7 @@ const ProjectSchema = z.object({
   lifecycle: z.string().default('active'),
   lifecycleOverride: z.string().optional(),
   remote: z.any().optional(),
-  health: z.any().optional()
+  health: z.any().optional(),
 });
 
 const ProjectsFileSchema = z.array(ProjectSchema);
@@ -43,7 +80,9 @@ export class Storage {
   backupManager?: BackupManager;
 
   constructor(private context: vscode.ExtensionContext) {
-    const configLocation = vscode.workspace.getConfiguration('projectManagerPro').get<string>('projectsLocation', '');
+    const configLocation = vscode.workspace
+      .getConfiguration('projectManagerPro')
+      .get<string>('projectsLocation', '');
     if (configLocation) {
       this.projectsFilePath = path.join(expandHomePath(configLocation), PROJECTS_FILE);
     } else {
@@ -74,37 +113,37 @@ export class Storage {
         return [];
       }
 
-      return result.data.map((item: any) => ({
+      return result.data.map((item: RawProject) => ({
         id: item.id || Date.now().toString(),
         name: item.name || '',
         path: item.path || item.rootPath || '',
         tags: item.tags || [],
         enabled: item.enabled !== false,
         lastOpened: item.lastOpened || 0,
-        type: item.type || 'any',
-        lifecycle: item.lifecycle || 'active',
-        lifecycleOverride: item.lifecycleOverride,
+        type: (item.type || 'any') as ProjectType,
+        lifecycle: (item.lifecycle || 'active') as ProjectLifecycle,
+        lifecycleOverride: item.lifecycleOverride as ProjectLifecycle | undefined,
         remote: item.remote,
-        health: item.health
+        health: item.health,
       }));
     } catch {
       return [];
     }
   }
 
-  private saveProjectsToFile(projects: Project[]): void {
+  private async saveProjectsToFile(projects: Project[]): Promise<void> {
     const dir = path.dirname(this.projectsFilePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(this.projectsFilePath, JSON.stringify(projects, null, 2), 'utf-8');
+    await fs.promises.writeFile(this.projectsFilePath, JSON.stringify(projects, null, 2), 'utf-8');
   }
 
   private getDataInner(): StorageData {
-    const data = this.context.globalState.get<Partial<StorageData>>(STORAGE_KEY);
+    const data = this.context.globalState.get<StoredMetadata>(STORAGE_KEY);
     let projects = this.loadProjectsFromFile();
 
-    const storedVersion = (data as any)?.dataVersion as number | undefined;
+    const storedVersion = data?.dataVersion;
     if (storedVersion !== undefined && storedVersion < DATA_VERSION) {
       const migrated = runMigrations(
         {
@@ -115,14 +154,14 @@ export class Storage {
           snapshots: data?.snapshots || [],
           notes: data?.notes || [],
           tags: data?.tags || [...DEFAULT_TAGS],
-          settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) }
+          settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) },
         },
         storedVersion
       );
       projects = migrated.projects;
       this.context.globalState.update(STORAGE_KEY, {
         ...migrated,
-        dataVersion: DATA_VERSION
+        dataVersion: DATA_VERSION,
       });
     } else if (storedVersion === undefined) {
       this.context.globalState.update(STORAGE_KEY, {
@@ -133,7 +172,7 @@ export class Storage {
         notes: data?.notes || [],
         tags: data?.tags || [...DEFAULT_TAGS],
         settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) },
-        dataVersion: DATA_VERSION
+        dataVersion: DATA_VERSION,
       });
     }
 
@@ -145,7 +184,7 @@ export class Storage {
       snapshots: data?.snapshots || [],
       notes: data?.notes || [],
       tags: data?.tags || [...DEFAULT_TAGS],
-      settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) }
+      settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) },
     };
   }
 
@@ -170,15 +209,15 @@ export class Storage {
       notes: data.notes,
       tags: data.tags,
       settings: data.settings,
-      dataVersion: DATA_VERSION
+      dataVersion: DATA_VERSION,
     });
   }
 
   async saveData(data: StorageData): Promise<void> {
     if (this.backupManager) {
-      this.backupManager.backup();
+      await this.backupManager.backup();
     }
-    this.saveProjectsToFile(data.projects);
+    await this.saveProjectsToFile(data.projects);
     await this.saveMetadata(data);
   }
 
@@ -187,7 +226,7 @@ export class Storage {
   }
 
   async saveProjects(projects: Project[]): Promise<void> {
-    this.saveProjectsToFile(projects);
+    await this.saveProjectsToFile(projects);
     if (this.cache) {
       this.cache.projects = projects;
     }
@@ -272,7 +311,7 @@ export class Storage {
 
   async updateProject(project: Project): Promise<void> {
     const projects = this.getProjects();
-    const index = projects.findIndex(p => p.id === project.id);
+    const index = projects.findIndex((p) => p.id === project.id);
     if (index !== -1) {
       projects[index] = project;
       await this.saveProjects(projects);
@@ -281,12 +320,12 @@ export class Storage {
 
   async deleteProject(id: string): Promise<void> {
     const data = this.getData();
-    data.projects = data.projects.filter(p => p.id !== id);
-    data.tasks = data.tasks.filter(t => t.projectId !== id);
-    data.milestones = data.milestones.filter(m => m.projectId !== id);
-    data.changelog = data.changelog.filter(c => c.projectId !== id);
-    data.snapshots = data.snapshots.filter(s => s.projectId !== id);
-    data.notes = data.notes.filter(n => n.projectId !== id);
+    data.projects = data.projects.filter((p) => p.id !== id);
+    data.tasks = data.tasks.filter((t) => t.projectId !== id);
+    data.milestones = data.milestones.filter((m) => m.projectId !== id);
+    data.changelog = data.changelog.filter((c) => c.projectId !== id);
+    data.snapshots = data.snapshots.filter((s) => s.projectId !== id);
+    data.notes = data.notes.filter((n) => n.projectId !== id);
     await this.saveData(data);
   }
 
@@ -298,7 +337,7 @@ export class Storage {
 
   async updateTask(task: Task): Promise<void> {
     const tasks = this.getTasks();
-    const index = tasks.findIndex(t => t.id === task.id);
+    const index = tasks.findIndex((t) => t.id === task.id);
     if (index !== -1) {
       tasks[index] = task;
       await this.saveTasks(tasks);
@@ -306,7 +345,7 @@ export class Storage {
   }
 
   async deleteTask(id: string): Promise<void> {
-    const tasks = this.getTasks().filter(t => t.id !== id);
+    const tasks = this.getTasks().filter((t) => t.id !== id);
     await this.saveTasks(tasks);
   }
 
@@ -318,7 +357,7 @@ export class Storage {
 
   async updateMilestone(milestone: Milestone): Promise<void> {
     const milestones = this.getMilestones();
-    const index = milestones.findIndex(m => m.id === milestone.id);
+    const index = milestones.findIndex((m) => m.id === milestone.id);
     if (index !== -1) {
       milestones[index] = milestone;
       await this.saveMilestones(milestones);
@@ -326,7 +365,7 @@ export class Storage {
   }
 
   async deleteMilestone(id: string): Promise<void> {
-    const milestones = this.getMilestones().filter(m => m.id !== id);
+    const milestones = this.getMilestones().filter((m) => m.id !== id);
     await this.saveMilestones(milestones);
   }
 
@@ -338,7 +377,7 @@ export class Storage {
 
   async updateChangelogEntry(entry: ChangelogEntry): Promise<void> {
     const changelog = this.getChangelog();
-    const index = changelog.findIndex(c => c.id === entry.id);
+    const index = changelog.findIndex((c) => c.id === entry.id);
     if (index !== -1) {
       changelog[index] = entry;
       await this.saveChangelog(changelog);
@@ -346,7 +385,7 @@ export class Storage {
   }
 
   async deleteChangelogEntry(id: string): Promise<void> {
-    const changelog = this.getChangelog().filter(c => c.id !== id);
+    const changelog = this.getChangelog().filter((c) => c.id !== id);
     await this.saveChangelog(changelog);
   }
 
@@ -364,7 +403,7 @@ export class Storage {
 
   async updateNote(note: Note): Promise<void> {
     const notes = this.getNotes();
-    const index = notes.findIndex(n => n.id === note.id);
+    const index = notes.findIndex((n) => n.id === note.id);
     if (index !== -1) {
       notes[index] = note;
       await this.saveNotes(notes);
@@ -372,7 +411,7 @@ export class Storage {
   }
 
   async deleteNote(id: string): Promise<void> {
-    const notes = this.getNotes().filter(n => n.id !== id);
+    const notes = this.getNotes().filter((n) => n.id !== id);
     await this.saveNotes(notes);
   }
 
@@ -384,7 +423,7 @@ export class Storage {
 
   async updateTag(tag: Tag): Promise<void> {
     const tags = this.getTags();
-    const index = tags.findIndex(t => t.id === tag.id);
+    const index = tags.findIndex((t) => t.id === tag.id);
     if (index !== -1) {
       tags[index] = tag;
       await this.saveTags(tags);
@@ -392,10 +431,10 @@ export class Storage {
   }
 
   async deleteTag(id: string): Promise<void> {
-    const tags = this.getTags().filter(t => t.id !== id);
-    const projects = this.getProjects().map(p => ({
+    const tags = this.getTags().filter((t) => t.id !== id);
+    const projects = this.getProjects().map((p) => ({
       ...p,
-      tags: p.tags.filter(t => t !== id)
+      tags: p.tags.filter((t) => t !== id),
     }));
     await this.saveData({ ...this.getData(), projects, tags });
   }

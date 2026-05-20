@@ -1,9 +1,28 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import {
-  Project, Task, TaskStatus, Milestone, ChangelogEntry,
-  ContextSnapshot, Note, Tag, Settings, DEFAULT_SETTINGS, inferLifecycle
+  Project,
+  Task,
+  Milestone,
+  ChangelogEntry,
+  ContextSnapshot,
+  Note,
+  Tag,
+  Settings,
+  DEFAULT_SETTINGS,
+  inferLifecycle,
 } from '../../types';
+
+interface StateUpdateData {
+  projects: Project[];
+  tasks: Task[];
+  milestones: Milestone[];
+  changelog: ChangelogEntry[];
+  snapshots: ContextSnapshot[];
+  notes: Note[];
+  tags: Tag[];
+  settings: Settings;
+}
 
 interface ProjectStore {
   projects: Project[];
@@ -45,14 +64,13 @@ interface ProjectStore {
 
   toggleManageMode: () => void;
   toggleProjectSelection: (projectId: string) => void;
-  selectAllProjects: () => void;
+  selectAllProjects: (projectIds?: string[]) => void;
   deselectAllProjects: () => void;
   exitManageMode: () => void;
 
   updateTask: (projectId: string, task: Task) => void;
 
-  filteredProjects: () => Project[];
-  loadState: (data: any) => void;
+  loadState: (data: StateUpdateData) => void;
 }
 
 export const useProjectStore = create<ProjectStore>()(
@@ -100,14 +118,15 @@ export const useProjectStore = create<ProjectStore>()(
       }
     },
     setViewMode: (mode) => set({ viewMode: mode }),
-    setShowGlobalTasks: (show) => set({ showGlobalTasks: show, selectedProjectId: show ? null : get().selectedProjectId }),
+    setShowGlobalTasks: (show) =>
+      set({ showGlobalTasks: show, selectedProjectId: show ? null : get().selectedProjectId }),
     setLoading: (loading) => set({ isLoading: loading }),
 
     toggleManageMode: () => {
       const current = get();
       set({
         isManageMode: !current.isManageMode,
-        selectedProjectIds: new Set<string>()
+        selectedProjectIds: new Set<string>(),
       });
     },
 
@@ -122,9 +141,12 @@ export const useProjectStore = create<ProjectStore>()(
       set({ selectedProjectIds: next });
     },
 
-    selectAllProjects: () => {
-      const filtered = get().filteredProjects();
-      set({ selectedProjectIds: new Set(filtered.map(p => p.id)) });
+    selectAllProjects: (projectIds) => {
+      if (projectIds) {
+        set({ selectedProjectIds: new Set(projectIds) });
+      } else {
+        set({ selectedProjectIds: new Set(get().projects.map((p) => p.id)) });
+      }
     },
 
     deselectAllProjects: () => {
@@ -135,54 +157,15 @@ export const useProjectStore = create<ProjectStore>()(
       set({ isManageMode: false, selectedProjectIds: new Set<string>() });
     },
 
-    updateTask: (projectId, task) => set((state) => ({
-      tasks: state.tasks.map((t) => (t.id === task.id ? task : t))
-    })),
-
-    filteredProjects: () => {
-      const { projects, tags, searchQuery, selectedTag, sortBy } = get();
-      let result = [...projects];
-
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        result = result.filter((p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.path.toLowerCase().includes(query) ||
-          p.tags.some((tagId) => {
-            const tag = tags.find((t) => t.id === tagId);
-            return tag?.name.toLowerCase().includes(query);
-          })
-        );
-      }
-
-      if (selectedTag) {
-        result = result.filter((p) => p.tags.includes(selectedTag));
-      }
-
-      if (sortBy !== 'custom') {
-        result.sort((a, b) => {
-          switch (sortBy) {
-            case 'name':
-              return a.name.localeCompare(b.name);
-            case 'path':
-              return a.path.localeCompare(b.path);
-            case 'recent':
-              return (b.lastOpened || 0) - (a.lastOpened || 0);
-            case 'priority':
-              return 0;
-            default:
-              return 0;
-          }
-        });
-      }
-
-      return result;
-    },
+    updateTask: (projectId, task) =>
+      set((state) => ({
+        tasks: state.tasks.map((t) => (t.id === task.id ? task : t)),
+      })),
 
     loadState: (data) => {
       const projects = (data.projects || []).map((p: Project) => ({
         ...p,
-        lifecycle: inferLifecycle(p.lastOpened, p.lifecycleOverride)
+        lifecycle: inferLifecycle(p.lastOpened, p.lifecycleOverride),
       }));
       set({
         projects,
@@ -192,8 +175,8 @@ export const useProjectStore = create<ProjectStore>()(
         snapshots: data.snapshots || [],
         notes: data.notes || [],
         tags: data.tags || [],
-        settings: data.settings || DEFAULT_SETTINGS
+        settings: data.settings || DEFAULT_SETTINGS,
       });
-    }
+    },
   }))
 );

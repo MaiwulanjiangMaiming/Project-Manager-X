@@ -3,7 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Container } from '../core/container';
 
-export function registerWorkspaceCommands(ctx: vscode.ExtensionContext, container: Container): vscode.Disposable[] {
+export function registerWorkspaceCommands(
+  ctx: vscode.ExtensionContext,
+  container: Container
+): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('projectManagerPro.addDetectFolder', async () => {
       await container.projectManager.addDetectFolder();
@@ -23,34 +26,34 @@ export function registerWorkspaceCommands(ctx: vscode.ExtensionContext, containe
 
       const workspacePath = workspaceFolders[0].uri.fsPath;
       const projects = container.projectManager.getProjects();
-      const matched = projects.find(p => p.path === workspacePath);
+      const matched = projects.find((p) => p.path === workspacePath);
 
       if (matched) {
         matched.lastOpened = Date.now();
         await container.projectManager.updateProject(matched);
-        const openTasks = container.projectManager.getTasks(matched.id).filter(
-          t => t.status !== 'done' && t.status !== 'cancelled'
-        ).length;
+        const openTasks = container.projectManager
+          .getTasks(matched.id)
+          .filter((t) => t.status !== 'done' && t.status !== 'cancelled').length;
         container.statusBar.update(matched, openTasks);
         vscode.window.setStatusBarMessage(`Matched: ${matched.name}`, 3000);
       }
     }),
 
     vscode.commands.registerCommand('projectManagerPro.restoreBackup', async () => {
-      const backups = container.backupManager.listBackups();
+      const backups = await container.backupManager.listBackups();
       if (backups.length === 0) {
         vscode.window.showInformationMessage('No backups available');
         return;
       }
 
-      const items = backups.map(b => ({
+      const items = backups.map((b) => ({
         label: path.basename(b),
         description: fs.statSync(b).mtime.toLocaleString(),
-        fullPath: b
+        fullPath: b,
       }));
 
       const selected = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select a backup to restore...'
+        placeHolder: 'Select a backup to restore...',
       });
 
       if (!selected) return;
@@ -62,7 +65,7 @@ export function registerWorkspaceCommands(ctx: vscode.ExtensionContext, containe
       );
 
       if (confirm === 'Restore') {
-        const success = container.backupManager.restore(selected.fullPath);
+        const success = await container.backupManager.restore(selected.fullPath);
         if (success) {
           container.projectManager.invalidateCache();
           vscode.window.showInformationMessage('Backup restored successfully');
@@ -70,6 +73,6 @@ export function registerWorkspaceCommands(ctx: vscode.ExtensionContext, containe
           vscode.window.showErrorMessage('Failed to restore backup');
         }
       }
-    })
+    }),
   ];
 }

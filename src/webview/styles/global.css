@@ -5,7 +5,10 @@
   --bg-active: var(--vscode-list-activeSelectionBackground);
   --text-primary: var(--vscode-foreground);
   --text-secondary: var(--vscode-descriptionForeground);
-  --border-color: var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-editorWidget-border)));
+  --border-color: var(
+    --vscode-panel-border,
+    var(--vscode-widget-border, var(--vscode-editorWidget-border))
+  );
   --accent-color: var(--vscode-focusBorder);
   --danger-color: var(--vscode-errorForeground, #f44336);
   --success-color: var(--vscode-terminal-ansiGreen, #4caf50);
@@ -13,9 +16,21 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.1);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
   --transition: all 0.2s ease;
+
+  /* Theme-adaptive custom colors (default dark) */
+  --accent-custom: #4ecdc4;
+  --accent-custom-hover: #3dbdb4;
+  --bg-active-custom: color-mix(in srgb, var(--accent-custom) 12%, transparent);
+}
+
+[data-theme='light'] {
+  /* Theme-adaptive custom colors (light) */
+  --accent-custom: #2aa198;
+  --accent-custom-hover: #1e9189;
+  --bg-active-custom: color-mix(in srgb, var(--accent-custom) 8%, transparent);
 }
 
 * {
@@ -38,7 +53,7 @@
   opacity: 0;
   transition: opacity 0.12s ease;
   z-index: 99999;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -145,7 +160,7 @@ body {
   color: var(--vscode-editorWidget-foreground);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   overflow: hidden;
 }
@@ -315,7 +330,11 @@ body {
   min-width: 0;
 }
 
-.refresh-btn, .add-folder-btn, .edit-file-btn, .import-btn, .save-project-btn {
+.refresh-btn,
+.add-folder-btn,
+.edit-file-btn,
+.import-btn,
+.save-project-btn {
   width: 28px;
   height: 28px;
   padding: 4px;
@@ -331,12 +350,20 @@ body {
   flex-shrink: 0;
 }
 
-.refresh-btn:hover, .add-folder-btn:hover, .edit-file-btn:hover, .import-btn:hover, .save-project-btn:hover {
+.refresh-btn:hover,
+.add-folder-btn:hover,
+.edit-file-btn:hover,
+.import-btn:hover,
+.save-project-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.refresh-btn svg, .add-folder-btn svg, .edit-file-btn svg, .import-btn svg, .save-project-btn svg {
+.refresh-btn svg,
+.add-folder-btn svg,
+.edit-file-btn svg,
+.import-btn svg,
+.save-project-btn svg {
   width: 14px;
   height: 14px;
 }
@@ -448,7 +475,7 @@ body {
 
 .tag-btn.active {
   color: var(--contrast-text);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .tag-dot {
@@ -612,7 +639,9 @@ body {
 
 .color-option.selected {
   border-color: var(--text-primary);
-  box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 4px var(--text-primary);
+  box-shadow:
+    0 0 0 2px var(--bg-secondary),
+    0 0 0 4px var(--text-primary);
 }
 
 .color-option.custom {
@@ -731,11 +760,11 @@ body {
   transition: var(--transition);
 }
 
-.project-item[draggable="true"] {
+.project-item[draggable='true'] {
   cursor: grab;
 }
 
-.project-item[draggable="true"]:active {
+.project-item[draggable='true']:active {
   cursor: grabbing;
 }
 
@@ -752,7 +781,11 @@ body {
 }
 
 .project-card.remote {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(0, 122, 204, 0.05) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--bg-secondary) 0%,
+    color-mix(in srgb, var(--accent-color) 5%, transparent) 100%
+  );
   border-left: 3px solid var(--accent-color);
 }
 
@@ -787,7 +820,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -1455,7 +1490,8 @@ body {
   border-color: var(--accent-color);
 }
 
-.note-textarea, .note-edit-textarea {
+.note-textarea,
+.note-edit-textarea {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--border-color);
@@ -1469,7 +1505,8 @@ body {
   margin-bottom: 8px;
 }
 
-.note-textarea:focus, .note-edit-textarea:focus {
+.note-textarea:focus,
+.note-edit-textarea:focus {
   border-color: var(--accent-color);
 }
 
@@ -2017,10 +2054,18 @@ body {
   flex-shrink: 0;
 }
 
-.milestone-status-dot.upcoming { background: #858585; }
-.milestone-status-dot.in_progress { background: #FECA57; }
-.milestone-status-dot.completed { background: #4ECDC4; }
-.milestone-status-dot.overdue { background: #FF6B6B; }
+.milestone-status-dot.upcoming {
+  background: #858585;
+}
+.milestone-status-dot.in_progress {
+  background: #feca57;
+}
+.milestone-status-dot.completed {
+  background: #4ecdc4;
+}
+.milestone-status-dot.overdue {
+  background: #ff6b6b;
+}
 
 .milestone-title {
   flex: 1;
@@ -2130,10 +2175,18 @@ body {
   letter-spacing: 0.5px;
 }
 
-.section-added { color: #4ECDC4; }
-.section-changed { color: #FECA57; }
-.section-fixed { color: #54A0FF; }
-.section-removed { color: #FF6B6B; }
+.section-added {
+  color: #4ecdc4;
+}
+.section-changed {
+  color: #feca57;
+}
+.section-fixed {
+  color: #54a0ff;
+}
+.section-removed {
+  color: #ff6b6b;
+}
 
 .section-list {
   margin: 0;
@@ -2228,7 +2281,7 @@ body {
   background: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 10000;
   overflow: hidden;
   padding: 4px 0;
@@ -2262,7 +2315,6 @@ body {
   height: 8px;
 }
 
-
 /* ========================================
    Task Status Badges
    ======================================== */
@@ -2293,49 +2345,63 @@ body {
   color: #858585;
   border: 1px solid rgba(133, 133, 133, 0.3);
 }
-.status-badge.backlog::before { background: #858585; }
+.status-badge.backlog::before {
+  background: #858585;
+}
 
 .status-badge.todo {
   background: rgba(84, 160, 255, 0.15);
-  color: #54A0FF;
+  color: #54a0ff;
   border: 1px solid rgba(84, 160, 255, 0.3);
 }
-.status-badge.todo::before { background: #54A0FF; }
+.status-badge.todo::before {
+  background: #54a0ff;
+}
 
 .status-badge.in-progress {
   background: rgba(254, 202, 87, 0.15);
-  color: #FECA57;
+  color: #feca57;
   border: 1px solid rgba(254, 202, 87, 0.3);
 }
-.status-badge.in-progress::before { background: #FECA57; }
+.status-badge.in-progress::before {
+  background: #feca57;
+}
 
 .status-badge.review {
   background: rgba(170, 150, 218, 0.15);
-  color: #AA96DA;
+  color: #aa96da;
   border: 1px solid rgba(170, 150, 218, 0.3);
 }
-.status-badge.review::before { background: #AA96DA; }
+.status-badge.review::before {
+  background: #aa96da;
+}
 
 .status-badge.done {
   background: rgba(78, 205, 196, 0.15);
-  color: #4ECDC4;
+  color: #4ecdc4;
   border: 1px solid rgba(78, 205, 196, 0.3);
 }
-.status-badge.done::before { background: #4ECDC4; }
+.status-badge.done::before {
+  background: #4ecdc4;
+}
 
 .status-badge.blocked {
   background: rgba(255, 107, 107, 0.15);
-  color: #FF6B6B;
+  color: #ff6b6b;
   border: 1px solid rgba(255, 107, 107, 0.3);
 }
-.status-badge.blocked::before { background: #FF6B6B; }
+.status-badge.blocked::before {
+  background: #ff6b6b;
+}
 
 .status-badge.cancelled {
   background: rgba(60, 60, 60, 0.2);
   color: #999;
   border: 1px solid rgba(60, 60, 60, 0.4);
 }
-.status-badge.cancelled::before { background: #3c3c3c; }
+.status-badge.cancelled::before {
+  background: #3c3c3c;
+}
 
 /* ========================================
    Priority Indicators
@@ -2365,38 +2431,51 @@ body {
 
 .priority-indicator.critical {
   background: rgba(255, 0, 0, 0.15);
-  color: #FF4444;
+  color: #ff4444;
   border: 1px solid rgba(255, 0, 0, 0.35);
 }
 .priority-indicator.critical::before {
-  background: #FF0000;
+  background: #ff0000;
   animation: priority-pulse 1.5s ease-in-out infinite;
 }
 
 .priority-indicator.high {
   background: rgba(255, 107, 107, 0.15);
-  color: #FF6B6B;
+  color: #ff6b6b;
   border: 1px solid rgba(255, 107, 107, 0.3);
 }
-.priority-indicator.high::before { background: #FF6B6B; }
+.priority-indicator.high::before {
+  background: #ff6b6b;
+}
 
 .priority-indicator.medium {
   background: rgba(255, 230, 109, 0.15);
-  color: #FFE66D;
+  color: #ffe66d;
   border: 1px solid rgba(255, 230, 109, 0.3);
 }
-.priority-indicator.medium::before { background: #FFE66D; }
+.priority-indicator.medium::before {
+  background: #ffe66d;
+}
 
 .priority-indicator.low {
   background: rgba(78, 205, 196, 0.15);
-  color: #4ECDC4;
+  color: #4ecdc4;
   border: 1px solid rgba(78, 205, 196, 0.3);
 }
-.priority-indicator.low::before { background: #4ECDC4; }
+.priority-indicator.low::before {
+  background: #4ecdc4;
+}
 
 @keyframes priority-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.7); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.7);
+  }
 }
 
 /* ========================================
@@ -2418,7 +2497,7 @@ body {
   background: linear-gradient(
     90deg,
     var(--accent-color),
-    #4ECDC4,
+    var(--accent-custom),
     var(--accent-color)
   );
   background-size: 200% 100%;
@@ -2432,8 +2511,12 @@ body {
 }
 
 @keyframes progress-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ========================================
@@ -2493,7 +2576,7 @@ body {
 .task-filter-bar .filter-chip.active {
   border-color: var(--accent-color);
   color: var(--accent-color);
-  background: rgba(0, 122, 204, 0.1);
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
 }
 
 .global-task-item {
@@ -2609,7 +2692,7 @@ body {
   font-style: italic;
   margin-top: 6px;
   padding: 6px 8px;
-  background: rgba(0, 122, 204, 0.05);
+  background: color-mix(in srgb, var(--accent-color) 5%, transparent);
   border-radius: var(--radius-sm);
 }
 
@@ -2621,7 +2704,7 @@ body {
 
 .snapshot-card .snapshot-branch {
   font-size: 11px;
-  color: #AA96DA;
+  color: #aa96da;
   margin-top: 4px;
 }
 
@@ -2681,22 +2764,22 @@ body {
 
 .milestone-item .milestone-status.upcoming {
   background: rgba(84, 160, 255, 0.15);
-  color: #54A0FF;
+  color: #54a0ff;
 }
 
 .milestone-item .milestone-status.in-progress {
   background: rgba(254, 202, 87, 0.15);
-  color: #FECA57;
+  color: #feca57;
 }
 
 .milestone-item .milestone-status.completed {
   background: rgba(78, 205, 196, 0.15);
-  color: #4ECDC4;
+  color: #4ecdc4;
 }
 
 .milestone-item .milestone-status.overdue {
   background: rgba(255, 107, 107, 0.15);
-  color: #FF6B6B;
+  color: #ff6b6b;
 }
 
 .milestone-progress {
@@ -2752,17 +2835,33 @@ body {
   flex-shrink: 0;
 }
 
-.changelog-section.added h4 { color: #4ECDC4; }
-.changelog-section.added h4::before { background: #4ECDC4; }
+.changelog-section.added h4 {
+  color: #4ecdc4;
+}
+.changelog-section.added h4::before {
+  background: #4ecdc4;
+}
 
-.changelog-section.fixed h4 { color: #54A0FF; }
-.changelog-section.fixed h4::before { background: #54A0FF; }
+.changelog-section.fixed h4 {
+  color: #54a0ff;
+}
+.changelog-section.fixed h4::before {
+  background: #54a0ff;
+}
 
-.changelog-section.changed h4 { color: #FFE66D; }
-.changelog-section.changed h4::before { background: #FFE66D; }
+.changelog-section.changed h4 {
+  color: #ffe66d;
+}
+.changelog-section.changed h4::before {
+  background: #ffe66d;
+}
 
-.changelog-section.removed h4 { color: #FF6B6B; }
-.changelog-section.removed h4::before { background: #FF6B6B; }
+.changelog-section.removed h4 {
+  color: #ff6b6b;
+}
+.changelog-section.removed h4::before {
+  background: #ff6b6b;
+}
 
 .changelog-entry {
   display: flex;
@@ -2810,12 +2909,12 @@ body {
 }
 
 .health-dot.warning {
-  background: #FF9F43;
+  background: #ff9f43;
   box-shadow: 0 0 4px rgba(255, 159, 67, 0.5);
 }
 
 .health-dot.critical {
-  background: #FF6B6B;
+  background: #ff6b6b;
   box-shadow: 0 0 4px rgba(255, 107, 107, 0.5);
   animation: health-blink 2s ease-in-out infinite;
 }
@@ -2826,8 +2925,13 @@ body {
 }
 
 @keyframes health-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 /* ========================================
@@ -2914,8 +3018,14 @@ body {
 }
 
 @keyframes slideDown {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .batch-action-bar .select-all-btn {
@@ -3402,14 +3512,24 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: linear-gradient(90deg, var(--vscode-list-hoverBackground) 25%, var(--vscode-list-activeSelectionBackground) 50%, var(--vscode-list-hoverBackground) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--vscode-list-hoverBackground) 25%,
+    var(--vscode-list-activeSelectionBackground) 50%,
+    var(--vscode-list-hoverBackground) 75%
+  );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
   flex-shrink: 0;
 }
 
 .skeleton-line {
-  background: linear-gradient(90deg, var(--vscode-list-hoverBackground) 25%, var(--vscode-list-activeSelectionBackground) 50%, var(--vscode-list-hoverBackground) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--vscode-list-hoverBackground) 25%,
+    var(--vscode-list-activeSelectionBackground) 50%,
+    var(--vscode-list-hoverBackground) 75%
+  );
   background-size: 200% 100%;
   animation: skeleton-shimmer 1.5s infinite;
   border-radius: 4px;
@@ -3432,8 +3552,12 @@ body {
 }
 
 @keyframes skeleton-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .context-menu {
@@ -3441,7 +3565,7 @@ body {
   background: var(--vscode-editorWidget-background);
   border: 1px solid var(--vscode-editorWidget-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   padding: 4px 0;
   overflow: hidden;
 }
@@ -3505,4 +3629,23 @@ body {
   height: 56px;
   margin-bottom: 20px;
   opacity: 0.4;
+}
+
+.error-boundary {
+  padding: 20px;
+  text-align: center;
+  color: var(--vscode-foreground);
+}
+.error-boundary h3 {
+  margin-bottom: 10px;
+  color: var(--vscode-errorForeground);
+}
+.error-boundary button {
+  margin-top: 15px;
+  padding: 6px 16px;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }

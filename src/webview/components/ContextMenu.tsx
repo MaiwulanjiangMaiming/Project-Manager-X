@@ -51,7 +51,10 @@ export default function ContextMenu({ x, y, items, onClose }: ContextMenuProps) 
           ) : (
             <button
               className={`context-menu-item ${item.danger ? 'danger' : ''}`}
-              onClick={() => { item.onClick(); onClose(); }}
+              onClick={() => {
+                item.onClick();
+                onClose();
+              }}
             >
               {item.icon && <span className="context-menu-icon">{item.icon}</span>}
               <span className="context-menu-label">{item.label}</span>

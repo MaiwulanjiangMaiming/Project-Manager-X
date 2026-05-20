@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 interface EmptyStateProps {
   hasProjects: boolean;
@@ -10,11 +10,17 @@ interface EmptyStateProps {
 const CONFIGS = {
   'no-projects': {
     icon: (
-      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="empty-icon">
-        <path d="M32 8L8 20v24l24 12 24-12V20L32 8z"/>
-        <path d="M32 32L8 20"/>
-        <path d="M32 32v24"/>
-        <path d="M32 32l24-12"/>
+      <svg
+        viewBox="0 0 64 64"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="empty-icon"
+      >
+        <path d="M32 8L8 20v24l24 12 24-12V20L32 8z" />
+        <path d="M32 32L8 20" />
+        <path d="M32 32v24" />
+        <path d="M32 32l24-12" />
       </svg>
     ),
     title: 'No projects yet',
@@ -22,9 +28,15 @@ const CONFIGS = {
   },
   'no-results': {
     icon: (
-      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="empty-icon">
-        <circle cx="28" cy="28" r="16"/>
-        <line x1="40" y1="40" x2="56" y2="56"/>
+      <svg
+        viewBox="0 0 64 64"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="empty-icon"
+      >
+        <circle cx="28" cy="28" r="16" />
+        <line x1="40" y1="40" x2="56" y2="56" />
       </svg>
     ),
     title: 'No matching projects',
@@ -32,7 +44,12 @@ const CONFIGS = {
   },
 };
 
-export default function EmptyState({ hasProjects, searchQuery, onAddDetectFolder, onImportFromProjectManager }: EmptyStateProps) {
+function EmptyState({
+  hasProjects,
+  searchQuery,
+  onAddDetectFolder,
+  onImportFromProjectManager,
+}: EmptyStateProps) {
   const reason = hasProjects ? 'no-results' : 'no-projects';
   const config = CONFIGS[reason];
 
@@ -65,3 +82,5 @@ export default function EmptyState({ hasProjects, searchQuery, onAddDetectFolder
     </div>
   );
 }
+
+export default memo(EmptyState);

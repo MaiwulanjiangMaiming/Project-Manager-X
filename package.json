@@ -2,7 +2,7 @@
   "name": "project-manager-x",
   "displayName": "Project Manager X Pro",
   "description": "Modern project manager with drag-and-drop, tags, and beautiful UI",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "MaiwulanjiangMaiming",
   "author": {
     "name": "Maiwulanjiang Maiming",
@@ -168,18 +168,38 @@
     }
   },
   "scripts": {
-    "build": "node build.js",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && node build.js",
     "build:dev": "node build.js --dev",
     "watch": "node build.js --watch",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\"",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^25.8.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/vscode": "^1.78.0",
+    "@typescript-eslint/eslint-plugin": "^8.59.4",
+    "@typescript-eslint/parser": "^8.59.4",
+    "@vscode/test-cli": "^0.0.12",
     "esbuild": "^0.20.0",
-    "typescript": "^5.3.0"
+    "eslint": "^10.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "husky": "^9.1.7",
+    "jsdom": "^29.1.1",
+    "lint-staged": "^17.0.5",
+    "prettier": "^3.8.3",
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.6"
   },
   "dependencies": {
     "nanoid": "^5.0.0",
@@ -187,5 +207,14 @@
     "react-dom": "^18.2.0",
     "zod": "^3.23.0",
     "zustand": "^5.0.13"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
   }
 }

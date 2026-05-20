@@ -30,6 +30,12 @@ A powerful VS Code extension for managing projects with tags, tasks, milestones,
 - **Custom Sorting**: Drag to reorder projects in custom mode
 - **Batch Operations**: Select and delete multiple projects at once
 - **Keyboard Navigation**: Full keyboard support with arrow keys and shortcuts
+- ✅ **Theme Adaptation**: Automatically adapts to VS Code dark/light/high contrast themes
+- ✅ **Progress Notifications**: Visual feedback for long-running operations
+- ✅ **Undo Support**: Undo project deletion within 5 seconds
+- ✅ **Quick Switch Enhancement**: Shows Git branch, pending tasks, and last opened time
+- ✅ **Code Quality**: ESLint + Prettier + Husky pre-commit hooks
+- ✅ **Test Coverage**: 65+ unit tests for core modules
 
 ## Installation
 
@@ -96,6 +102,8 @@ Search for **"Project Manager X"** in the Extensions view (`Cmd+Shift+X`)
 ```
 Project-Manager-X/
 ├── src/
+│   ├── __tests__/            # Unit tests (65+ tests)
+│   ├── __mocks__/            # VS Code API mocks
 │   ├── extension.ts          # Main entry
 │   ├── core/                 # Core modules
 │   │   ├── storage.ts        # Data persistence
@@ -119,14 +127,14 @@ Project-Manager-X/
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Navigate projects |
-| `Enter` | Open selected project |
-| `Ctrl+Enter` | Open in new window |
-| `Delete` | Delete selected project |
-| `/` | Focus search |
-| `Escape` | Clear search / go back |
+| Key          | Action                  |
+| ------------ | ----------------------- |
+| `↑` / `↓`    | Navigate projects       |
+| `Enter`      | Open selected project   |
+| `Ctrl+Enter` | Open in new window      |
+| `Delete`     | Delete selected project |
+| `/`          | Focus search            |
+| `Escape`     | Clear search / go back  |
 
 ## Feedback & Reviews
 
@@ -143,6 +151,7 @@ GPL-3.0 License
 ## Contact
 
 For feature requests or bug reports:
+
 - [GitHub Issues](https://github.com/MaiwulanjiangMaiming/Project-Manager-X/issues)
 - Email: mawlan.momin@gmail.com
 

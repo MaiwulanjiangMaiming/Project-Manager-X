@@ -51,10 +51,7 @@ export class ReminderSystem {
   private showReminder(task: Task): void {
     const dueDate = new Date(task.dueDate!);
     const formatted = dueDate.toLocaleDateString();
-    vscode.window.showWarningMessage(
-      `Task "${task.title}" is due ${formatted}`,
-      'View Task'
-    );
+    vscode.window.showWarningMessage(`Task "${task.title}" is due ${formatted}`, 'View Task');
   }
 
   dispose(): void {

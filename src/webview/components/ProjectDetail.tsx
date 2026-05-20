@@ -19,8 +19,24 @@ import {
 
 type DetailTab = 'overview' | 'tasks' | 'milestones' | 'changelog' | 'notes';
 
-const ALL_STATUSES: TaskStatus[] = ['backlog', 'todo', 'in_progress', 'review', 'done', 'blocked', 'cancelled'];
-const ALL_CATEGORIES: TaskCategory[] = ['bug', 'feature', 'refactor', 'docs', 'research', 'chore', 'experiment'];
+const ALL_STATUSES: TaskStatus[] = [
+  'backlog',
+  'todo',
+  'in_progress',
+  'review',
+  'done',
+  'blocked',
+  'cancelled',
+];
+const ALL_CATEGORIES: TaskCategory[] = [
+  'bug',
+  'feature',
+  'refactor',
+  'docs',
+  'research',
+  'chore',
+  'experiment',
+];
 const ALL_PRIORITIES: TaskPriority[] = ['critical', 'high', 'medium', 'low'];
 
 interface ProjectDetailProps {
@@ -34,12 +50,22 @@ interface ProjectDetailProps {
   onBack: () => void;
   onOpenProject: (id: string) => void;
   onUpdateProject: (project: Project) => void;
-  onCreateTask: (projectId: string, title: string, category: TaskCategory, priority: TaskPriority) => void;
+  onCreateTask: (
+    projectId: string,
+    title: string,
+    category: TaskCategory,
+    priority: TaskPriority
+  ) => void;
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onBatchDeleteTasks: (taskIds: string[]) => void;
   onBatchUpdateTaskStatus: (taskIds: string[], status: TaskStatus) => void;
-  onCreateMilestone: (projectId: string, title: string, description?: string, dueDate?: number) => void;
+  onCreateMilestone: (
+    projectId: string,
+    title: string,
+    description?: string,
+    dueDate?: number
+  ) => void;
   onUpdateMilestone: (milestone: Milestone) => void;
   onDeleteMilestone: (milestoneId: string) => void;
   onCreateChangelog: (projectId: string, version: string, changes: Partial<ChangelogEntry>) => void;
@@ -66,7 +92,7 @@ export default function ProjectDetail({
   onBatchDeleteTasks,
   onBatchUpdateTaskStatus,
   onCreateMilestone,
-  onUpdateMilestone,
+  onUpdateMilestone: _onUpdateMilestone,
   onDeleteMilestone,
   onCreateChangelog,
   onDeleteChangelog,
@@ -77,15 +103,33 @@ export default function ProjectDetail({
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [showLifecyclePicker, setShowLifecyclePicker] = useState(false);
 
-  const projectTasks = useMemo(() => tasks.filter(t => t.projectId === project.id), [tasks, project.id]);
-  const projectMilestones = useMemo(() => milestones.filter(m => m.projectId === project.id), [milestones, project.id]);
-  const projectChangelog = useMemo(() => changelog.filter(c => c.projectId === project.id), [changelog, project.id]);
-  const projectSnapshots = useMemo(() => snapshots.filter(s => s.projectId === project.id), [snapshots, project.id]);
-  const projectNotes = useMemo(() => notes.filter(n => n.projectId === project.id), [notes, project.id]);
+  const projectTasks = useMemo(
+    () => tasks.filter((t) => t.projectId === project.id),
+    [tasks, project.id]
+  );
+  const projectMilestones = useMemo(
+    () => milestones.filter((m) => m.projectId === project.id),
+    [milestones, project.id]
+  );
+  const projectChangelog = useMemo(
+    () => changelog.filter((c) => c.projectId === project.id),
+    [changelog, project.id]
+  );
+  const projectSnapshots = useMemo(
+    () => snapshots.filter((s) => s.projectId === project.id),
+    [snapshots, project.id]
+  );
+  const projectNotes = useMemo(
+    () => notes.filter((n) => n.projectId === project.id),
+    [notes, project.id]
+  );
 
   const latestSnapshot = useMemo(
-    () => (projectSnapshots.length > 0 ? projectSnapshots.reduce((a, b) => (a.timestamp > b.timestamp ? a : b)) : null),
-    [projectSnapshots],
+    () =>
+      projectSnapshots.length > 0
+        ? projectSnapshots.reduce((a, b) => (a.timestamp > b.timestamp ? a : b))
+        : null,
+    [projectSnapshots]
   );
 
   const tasksByStatus = useMemo(() => {
@@ -101,7 +145,7 @@ export default function ProjectDetail({
 
   const completionRate = useMemo(() => {
     if (projectTasks.length === 0) return 0;
-    const done = projectTasks.filter(t => t.status === 'done').length;
+    const done = projectTasks.filter((t) => t.status === 'done').length;
     return Math.round((done / projectTasks.length) * 100);
   }, [projectTasks]);
 
@@ -128,8 +172,12 @@ export default function ProjectDetail({
           <div className="detail-title">
             <h3>
               <span className="detail-type-icon" data-tip={typeInfo.label}>
-                {typeInfo.svg ? (
-                  <svg viewBox={typeInfo.svgViewBox || '0 0 16 16'} fill="currentColor" dangerouslySetInnerHTML={{ __html: typeInfo.svg }} />
+                {typeInfo.paths ? (
+                  <svg viewBox={typeInfo.viewBox || '0 0 16 16'} fill="currentColor">
+                    {typeInfo.paths.map((d, i) => (
+                      <path key={i} d={d} />
+                    ))}
+                  </svg>
                 ) : (
                   typeInfo.icon
                 )}
@@ -139,50 +187,68 @@ export default function ProjectDetail({
             <div className="detail-badges">
               <span
                 className="lifecycle-indicator"
-                onClick={(e) => { e.stopPropagation(); setShowLifecyclePicker(!showLifecyclePicker); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowLifecyclePicker(!showLifecyclePicker);
+                }}
                 data-tip="Click to change lifecycle"
               >
                 <span className="lifecycle-dot" style={{ backgroundColor: lifecycleColor }} />
                 <span className="lifecycle-text">{project.lifecycle}</span>
                 <svg viewBox="0 0 16 16" fill="currentColor" className="lifecycle-chevron">
-                  <path d="M4.5 6l3.5 3.5L11.5 6"/>
+                  <path d="M4.5 6l3.5 3.5L11.5 6" />
                 </svg>
               </span>
               {showLifecyclePicker && (
                 <div className="lifecycle-picker" onClick={(e) => e.stopPropagation()}>
-                  {(['idea', 'planning', 'active', 'maintenance', 'archived'] as const).map(lc => (
-                    <button
-                      key={lc}
-                      className={`lifecycle-option ${project.lifecycle === lc ? 'current' : ''}`}
-                      onClick={() => {
-                      onUpdateProject({
-                        ...project,
-                        lifecycle: lc,
-                        lifecycleOverride: lc
-                      });
-                      setShowLifecyclePicker(false);
-                    }}
-                    >
-                      <span className="lifecycle-dot" style={{ backgroundColor: LIFECYCLE_COLORS[lc] }} />
-                      {LIFECYCLE_LABELS[lc]}
-                    </button>
-                  ))}
+                  {(['idea', 'planning', 'active', 'maintenance', 'archived'] as const).map(
+                    (lc) => (
+                      <button
+                        key={lc}
+                        className={`lifecycle-option ${project.lifecycle === lc ? 'current' : ''}`}
+                        onClick={() => {
+                          onUpdateProject({
+                            ...project,
+                            lifecycle: lc,
+                            lifecycleOverride: lc,
+                          });
+                          setShowLifecyclePicker(false);
+                        }}
+                      >
+                        <span
+                          className="lifecycle-dot"
+                          style={{ backgroundColor: LIFECYCLE_COLORS[lc] }}
+                        />
+                        {LIFECYCLE_LABELS[lc]}
+                      </button>
+                    )
+                  )}
                 </div>
               )}
-              {tags.filter(t => project.tags.includes(t.id)).map(tag => (
-                <span
-                  key={tag.id}
-                  className="detail-tag-badge"
-                  style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '55' }}
-                  data-tip={`Tag: ${tag.name}`}
-                >
-                  <span className="detail-tag-dot" style={{ backgroundColor: tag.color }} />
-                  {tag.name}
-                </span>
-              ))}
+              {tags
+                .filter((t) => project.tags.includes(t.id))
+                .map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="detail-tag-badge"
+                    style={{
+                      backgroundColor: tag.color + '22',
+                      color: tag.color,
+                      borderColor: tag.color + '55',
+                    }}
+                    data-tip={`Tag: ${tag.name}`}
+                  >
+                    <span className="detail-tag-dot" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </span>
+                ))}
             </div>
           </div>
-          <button className="open-project-btn" onClick={() => onOpenProject(project.id)} data-tip="Open project">
+          <button
+            className="open-project-btn"
+            onClick={() => onOpenProject(project.id)}
+            data-tip="Open project"
+          >
             <svg viewBox="0 0 16 16" fill="currentColor">
               <path d="M8.53 3.22a.75.75 0 00-1.06 1.06L10.19 7H2.75a.75.75 0 000 1.5h7.44l-2.97 2.97a.75.75 0 101.06 1.06l4.25-4.25a.75.75 0 000-1.06L8.53 3.22z" />
             </svg>
@@ -194,14 +260,18 @@ export default function ProjectDetail({
       </div>
 
       <div className="detail-tabs">
-        {TAB_CONFIG.map(tab => (
+        {TAB_CONFIG.map((tab) => (
           <button
             key={tab.key}
             className={`detail-tab ${activeTab === tab.key ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
-            {tab.count !== undefined && <span className="tab-count" data-tip={`${tab.count} ${tab.label.toLowerCase()}`}>{tab.count}</span>}
+            {tab.count !== undefined && (
+              <span className="tab-count" data-tip={`${tab.count} ${tab.label.toLowerCase()}`}>
+                {tab.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -303,7 +373,10 @@ function OverviewTab({
 
       <div className="overview-progress">
         <div className="progress-bar-track">
-          <div className="progress-bar-fill" style={{ width: `${completionRate}%`, backgroundColor: lifecycleColor }} />
+          <div
+            className="progress-bar-fill"
+            style={{ width: `${completionRate}%`, backgroundColor: lifecycleColor }}
+          />
         </div>
       </div>
 
@@ -350,15 +423,20 @@ function OverviewTab({
       <div className="overview-status-breakdown">
         <h4>Task Breakdown</h4>
         <div className="breakdown-bars">
-          {ALL_STATUSES.map(status => {
+          {ALL_STATUSES.map((status) => {
             const count = statusCounts[status] || 0;
             if (count === 0) return null;
             const pct = tasks.length > 0 ? (count / tasks.length) * 100 : 0;
             return (
               <div key={status} className="breakdown-row">
-                <span className="breakdown-label" style={{ color: STATUS_COLORS[status] }}>{status}</span>
+                <span className="breakdown-label" style={{ color: STATUS_COLORS[status] }}>
+                  {status}
+                </span>
                 <div className="breakdown-bar-track">
-                  <div className="breakdown-bar-fill" style={{ width: `${pct}%`, backgroundColor: STATUS_COLORS[status] }} />
+                  <div
+                    className="breakdown-bar-fill"
+                    style={{ width: `${pct}%`, backgroundColor: STATUS_COLORS[status] }}
+                  />
                 </div>
                 <span className="breakdown-count">{count}</span>
               </div>
@@ -381,7 +459,12 @@ function TasksTab({
 }: {
   project: Project;
   tasksByStatus: Record<TaskStatus, Task[]>;
-  onCreateTask: (projectId: string, title: string, category: TaskCategory, priority: TaskPriority) => void;
+  onCreateTask: (
+    projectId: string,
+    title: string,
+    category: TaskCategory,
+    priority: TaskPriority
+  ) => void;
   onUpdateTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onBatchDeleteTasks: (taskIds: string[]) => void;
@@ -415,12 +498,12 @@ function TasksTab({
   }, [tasksByStatus]);
 
   const toggleSelectMode = () => {
-    setIsSelectMode(prev => !prev);
+    setIsSelectMode((prev) => !prev);
     setSelectedTaskIds(new Set());
   };
 
   const toggleTaskSelection = (taskId: string) => {
-    setSelectedTaskIds(prev => {
+    setSelectedTaskIds((prev) => {
       const next = new Set(prev);
       if (next.has(taskId)) {
         next.delete(taskId);
@@ -453,13 +536,25 @@ function TasksTab({
     }
   };
 
-  const orderedStatuses: TaskStatus[] = ['in_progress', 'todo', 'backlog', 'review', 'blocked', 'done', 'cancelled'];
+  const orderedStatuses: TaskStatus[] = [
+    'in_progress',
+    'todo',
+    'backlog',
+    'review',
+    'blocked',
+    'done',
+    'cancelled',
+  ];
 
   return (
     <div className="tasks-tab">
       <div className="tasks-toolbar">
         {!showForm ? (
-          <button className="btn-primary add-entity-btn" onClick={() => setShowForm(true)} data-tip="Create new task">
+          <button
+            className="btn-primary add-entity-btn"
+            onClick={() => setShowForm(true)}
+            data-tip="Create new task"
+          >
             + New Task
           </button>
         ) : (
@@ -469,25 +564,47 @@ function TasksTab({
               className="task-input"
               placeholder="Task title..."
               value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAdd()}
+              onChange={(e) => setNewTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
               autoFocus
             />
             <div className="task-form-row">
-              <select className="task-select" value={newCategory} onChange={e => setNewCategory(e.target.value as TaskCategory)}>
-                {ALL_CATEGORIES.map(c => (
-                  <option key={c} value={c}>{c}</option>
+              <select
+                className="task-select"
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value as TaskCategory)}
+              >
+                {ALL_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
-              <select className="task-select" value={newPriority} onChange={e => setNewPriority(e.target.value as TaskPriority)}>
-                {ALL_PRIORITIES.map(p => (
-                  <option key={p} value={p}>{p}</option>
+              <select
+                className="task-select"
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
+              >
+                {ALL_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
                 ))}
               </select>
             </div>
             <div className="task-form-actions">
-              <button className="btn-primary" onClick={handleAdd}>Create</button>
-              <button className="btn-secondary" onClick={() => { setShowForm(false); setNewTitle(''); }}>Cancel</button>
+              <button className="btn-primary" onClick={handleAdd}>
+                Create
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setShowForm(false);
+                  setNewTitle('');
+                }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
@@ -503,7 +620,15 @@ function TasksTab({
       {isSelectMode && (
         <div className="batch-action-bar">
           <div className="batch-action-left">
-            <button className="btn-secondary batch-select-btn" onClick={selectedTaskIds.size === allTaskIds.length ? deselectAll : selectAll} data-tip={selectedTaskIds.size === allTaskIds.length ? 'Deselect all tasks' : 'Select all tasks'}>
+            <button
+              className="btn-secondary batch-select-btn"
+              onClick={selectedTaskIds.size === allTaskIds.length ? deselectAll : selectAll}
+              data-tip={
+                selectedTaskIds.size === allTaskIds.length
+                  ? 'Deselect all tasks'
+                  : 'Select all tasks'
+              }
+            >
               {selectedTaskIds.size === allTaskIds.length ? 'Deselect All' : 'Select All'}
             </button>
             <span className="batch-selected-count">{selectedTaskIds.size} selected</span>
@@ -513,10 +638,12 @@ function TasksTab({
               <select
                 className="task-select batch-status-select"
                 value={batchStatus}
-                onChange={e => setBatchStatus(e.target.value as TaskStatus)}
+                onChange={(e) => setBatchStatus(e.target.value as TaskStatus)}
               >
-                {ALL_STATUSES.map(s => (
-                  <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                {ALL_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace('_', ' ')}
+                  </option>
                 ))}
               </select>
               <button
@@ -540,18 +667,25 @@ function TasksTab({
         </div>
       )}
 
-      {orderedStatuses.map(status => {
+      {orderedStatuses.map((status) => {
         const group = tasksByStatus[status];
         if (group.length === 0) return null;
         return (
           <div key={status} className="task-status-group">
             <div className="status-group-header">
               <span className="status-dot" style={{ backgroundColor: STATUS_COLORS[status] }} />
-              <span className="status-group-label" style={{ color: STATUS_COLORS[status] }}>{status.replace('_', ' ')}</span>
-              <span className="status-group-count" data-tip={`${group.length} task${group.length !== 1 ? 's' : ''}`}>{group.length}</span>
+              <span className="status-group-label" style={{ color: STATUS_COLORS[status] }}>
+                {status.replace('_', ' ')}
+              </span>
+              <span
+                className="status-group-count"
+                data-tip={`${group.length} task${group.length !== 1 ? 's' : ''}`}
+              >
+                {group.length}
+              </span>
             </div>
             <div className="task-list">
-              {group.map(task => (
+              {group.map((task) => (
                 <div key={task.id} className="task-item">
                   <div className="task-main">
                     {isSelectMode && (
@@ -563,16 +697,31 @@ function TasksTab({
                       />
                     )}
                     <span className="task-title">{task.title}</span>
-                    <span className="task-badge" style={{ backgroundColor: PRIORITY_COLORS[task.priority] + '33', color: PRIORITY_COLORS[task.priority] }} data-tip={`Priority: ${task.priority}`}>
+                    <span
+                      className="task-badge"
+                      style={{
+                        backgroundColor: PRIORITY_COLORS[task.priority] + '33',
+                        color: PRIORITY_COLORS[task.priority],
+                      }}
+                      data-tip={`Priority: ${task.priority}`}
+                    >
                       {task.priority}
                     </span>
-                    <span className="task-badge task-category-badge" data-tip={`Category: ${task.category}`}>{task.category}</span>
+                    <span
+                      className="task-badge task-category-badge"
+                      data-tip={`Category: ${task.category}`}
+                    >
+                      {task.category}
+                    </span>
                   </div>
                   <div className="task-actions">
                     <div className="status-dropdown-wrapper">
                       <button
                         className="status-toggle-btn"
-                        style={{ borderColor: STATUS_COLORS[task.status], color: STATUS_COLORS[task.status] }}
+                        style={{
+                          borderColor: STATUS_COLORS[task.status],
+                          color: STATUS_COLORS[task.status],
+                        }}
                         onClick={() => setOpenDropdown(openDropdown === task.id ? null : task.id)}
                         data-tip={`Change status (current: ${task.status.replace('_', ' ')})`}
                       >
@@ -580,7 +729,7 @@ function TasksTab({
                       </button>
                       {openDropdown === task.id && (
                         <div className="status-dropdown">
-                          {ALL_STATUSES.map(s => (
+                          {ALL_STATUSES.map((s) => (
                             <button
                               key={s}
                               className={`status-option ${s === task.status ? 'current' : ''}`}
@@ -590,14 +739,21 @@ function TasksTab({
                                 setOpenDropdown(null);
                               }}
                             >
-                              <span className="status-dot" style={{ backgroundColor: STATUS_COLORS[s] }} />
+                              <span
+                                className="status-dot"
+                                style={{ backgroundColor: STATUS_COLORS[s] }}
+                              />
                               {s.replace('_', ' ')}
                             </button>
                           ))}
                         </div>
                       )}
                     </div>
-                    <button className="task-delete-btn" onClick={() => onDeleteTask(task.id)} data-tip="Delete">
+                    <button
+                      className="task-delete-btn"
+                      onClick={() => onDeleteTask(task.id)}
+                      data-tip="Delete"
+                    >
                       <svg viewBox="0 0 16 16" fill="currentColor">
                         <path d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM11.71 10.29L10.29 11.71L8 9.41L5.71 11.71L4.29 10.29L6.59 8L4.29 5.71L5.71 4.29L8 6.59L10.29 4.29L11.71 5.71L9.41 8L11.71 10.29Z" />
                       </svg>
@@ -610,7 +766,7 @@ function TasksTab({
         );
       })}
 
-      {orderedStatuses.every(s => tasksByStatus[s].length === 0) && (
+      {orderedStatuses.every((s) => tasksByStatus[s].length === 0) && (
         <div className="empty-section">
           <p>No tasks yet. Create one above!</p>
         </div>
@@ -629,7 +785,12 @@ function MilestonesTab({
   project: Project;
   milestones: Milestone[];
   tasks: Task[];
-  onCreateMilestone: (projectId: string, title: string, description?: string, dueDate?: number) => void;
+  onCreateMilestone: (
+    projectId: string,
+    title: string,
+    description?: string,
+    dueDate?: number
+  ) => void;
   onDeleteMilestone: (milestoneId: string) => void;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -649,13 +810,17 @@ function MilestonesTab({
   };
 
   const getLinkedTaskCount = (taskIds: string[]) => {
-    return taskIds.filter(id => tasks.some(t => t.id === id)).length;
+    return taskIds.filter((id) => tasks.some((t) => t.id === id)).length;
   };
 
   return (
     <div className="milestones-tab">
       {!showForm ? (
-        <button className="btn-primary add-entity-btn" onClick={() => setShowForm(true)} data-tip="Create new milestone">
+        <button
+          className="btn-primary add-entity-btn"
+          onClick={() => setShowForm(true)}
+          data-tip="Create new milestone"
+        >
           + New Milestone
         </button>
       ) : (
@@ -665,25 +830,37 @@ function MilestonesTab({
             className="task-input"
             placeholder="Milestone title..."
             value={title}
-            onChange={e => setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value)}
             autoFocus
           />
           <textarea
             className="note-textarea"
             placeholder="Description (optional)..."
             value={description}
-            onChange={e => setDescription(e.target.value)}
+            onChange={(e) => setDescription(e.target.value)}
             rows={2}
           />
           <input
             type="date"
             className="task-input"
             value={dueDate}
-            onChange={e => setDueDate(e.target.value)}
+            onChange={(e) => setDueDate(e.target.value)}
           />
           <div className="task-form-actions">
-            <button className="btn-primary" onClick={handleAdd}>Create</button>
-            <button className="btn-secondary" onClick={() => { setShowForm(false); setTitle(''); setDescription(''); setDueDate(''); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleAdd}>
+              Create
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setShowForm(false);
+                setTitle('');
+                setDescription('');
+                setDueDate('');
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -694,13 +871,22 @@ function MilestonesTab({
         </div>
       ) : (
         <div className="milestones-list">
-          {milestones.map(ms => (
+          {milestones.map((ms) => (
             <div key={ms.id} className="milestone-item">
               <div className="milestone-header">
                 <span className={`milestone-status-dot ${ms.status}`} />
                 <h4 className="milestone-title">{ms.title}</h4>
-                <span className="milestone-status-badge" data-tip={`Status: ${ms.status.replace('_', ' ')}`}>{ms.status.replace('_', ' ')}</span>
-                <button className="task-delete-btn" onClick={() => onDeleteMilestone(ms.id)} data-tip="Delete milestone">
+                <span
+                  className="milestone-status-badge"
+                  data-tip={`Status: ${ms.status.replace('_', ' ')}`}
+                >
+                  {ms.status.replace('_', ' ')}
+                </span>
+                <button
+                  className="task-delete-btn"
+                  onClick={() => onDeleteMilestone(ms.id)}
+                  data-tip="Delete milestone"
+                >
                   <svg viewBox="0 0 16 16" fill="currentColor">
                     <path d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM11.71 10.29L10.29 11.71L8 9.41L5.71 11.71L4.29 10.29L6.59 8L4.29 5.71L5.71 4.29L8 6.59L10.29 4.29L11.71 5.71L9.41 8L11.71 10.29Z" />
                   </svg>
@@ -711,11 +897,19 @@ function MilestonesTab({
                 <div className="progress-bar-track">
                   <div className="progress-bar-fill" style={{ width: `${ms.progress}%` }} />
                 </div>
-                <span className="progress-label">{ms.completedTasks}/{ms.totalTasks} tasks</span>
+                <span className="progress-label">
+                  {ms.completedTasks}/{ms.totalTasks} tasks
+                </span>
               </div>
               <div className="milestone-meta">
-                <span className="milestone-linked">{getLinkedTaskCount(ms.taskIds)} linked tasks</span>
-                {ms.dueDate && <span className="milestone-due">Due: {new Date(ms.dueDate).toLocaleDateString()}</span>}
+                <span className="milestone-linked">
+                  {getLinkedTaskCount(ms.taskIds)} linked tasks
+                </span>
+                {ms.dueDate && (
+                  <span className="milestone-due">
+                    Due: {new Date(ms.dueDate).toLocaleDateString()}
+                  </span>
+                )}
               </div>
             </div>
           ))}
@@ -768,7 +962,11 @@ function ChangelogTab({
   return (
     <div className="changelog-tab">
       {!showForm ? (
-        <button className="btn-primary add-entity-btn" onClick={() => setShowForm(true)} data-tip="Create changelog entry">
+        <button
+          className="btn-primary add-entity-btn"
+          onClick={() => setShowForm(true)}
+          data-tip="Create changelog entry"
+        >
           + New Entry
         </button>
       ) : (
@@ -778,17 +976,62 @@ function ChangelogTab({
             className="task-input"
             placeholder="Version (e.g. 1.2.0)..."
             value={version}
-            onChange={e => setVersion(e.target.value)}
+            onChange={(e) => setVersion(e.target.value)}
             autoFocus
           />
-          <textarea className="note-textarea" placeholder="Added (one per line)..." value={addedText} onChange={e => setAddedText(e.target.value)} rows={2} />
-          <textarea className="note-textarea" placeholder="Changed (one per line)..." value={changedText} onChange={e => setChangedText(e.target.value)} rows={2} />
-          <textarea className="note-textarea" placeholder="Fixed (one per line)..." value={fixedText} onChange={e => setFixedText(e.target.value)} rows={2} />
-          <textarea className="note-textarea" placeholder="Removed (one per line)..." value={removedText} onChange={e => setRemovedText(e.target.value)} rows={2} />
-          <textarea className="note-textarea" placeholder="Notes..." value={changelogNotes} onChange={e => setChangelogNotes(e.target.value)} rows={2} />
+          <textarea
+            className="note-textarea"
+            placeholder="Added (one per line)..."
+            value={addedText}
+            onChange={(e) => setAddedText(e.target.value)}
+            rows={2}
+          />
+          <textarea
+            className="note-textarea"
+            placeholder="Changed (one per line)..."
+            value={changedText}
+            onChange={(e) => setChangedText(e.target.value)}
+            rows={2}
+          />
+          <textarea
+            className="note-textarea"
+            placeholder="Fixed (one per line)..."
+            value={fixedText}
+            onChange={(e) => setFixedText(e.target.value)}
+            rows={2}
+          />
+          <textarea
+            className="note-textarea"
+            placeholder="Removed (one per line)..."
+            value={removedText}
+            onChange={(e) => setRemovedText(e.target.value)}
+            rows={2}
+          />
+          <textarea
+            className="note-textarea"
+            placeholder="Notes..."
+            value={changelogNotes}
+            onChange={(e) => setChangelogNotes(e.target.value)}
+            rows={2}
+          />
           <div className="task-form-actions">
-            <button className="btn-primary" onClick={handleAdd}>Create</button>
-            <button className="btn-secondary" onClick={() => { setShowForm(false); setVersion(''); setAddedText(''); setChangedText(''); setFixedText(''); setRemovedText(''); setChangelogNotes(''); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleAdd}>
+              Create
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setShowForm(false);
+                setVersion('');
+                setAddedText('');
+                setChangedText('');
+                setFixedText('');
+                setRemovedText('');
+                setChangelogNotes('');
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -799,12 +1042,22 @@ function ChangelogTab({
         </div>
       ) : (
         <div className="changelog-list">
-          {sorted.map(entry => (
+          {sorted.map((entry) => (
             <div key={entry.id} className="changelog-item">
               <div className="changelog-header">
-                {entry.version && <span className="changelog-version" data-tip={`Version ${entry.version}`}>{entry.version}</span>}
-                <span className="changelog-date" data-tip={new Date(entry.date).toLocaleString()}>{new Date(entry.date).toLocaleDateString()}</span>
-                <button className="task-delete-btn" onClick={() => onDeleteChangelog(entry.id)} data-tip="Delete changelog entry">
+                {entry.version && (
+                  <span className="changelog-version" data-tip={`Version ${entry.version}`}>
+                    {entry.version}
+                  </span>
+                )}
+                <span className="changelog-date" data-tip={new Date(entry.date).toLocaleString()}>
+                  {new Date(entry.date).toLocaleDateString()}
+                </span>
+                <button
+                  className="task-delete-btn"
+                  onClick={() => onDeleteChangelog(entry.id)}
+                  data-tip="Delete changelog entry"
+                >
                   <svg viewBox="0 0 16 16" fill="currentColor">
                     <path d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM11.71 10.29L10.29 11.71L8 9.41L5.71 11.71L4.29 10.29L6.59 8L4.29 5.71L5.71 4.29L8 6.59L10.29 4.29L11.71 5.71L9.41 8L11.71 10.29Z" />
                   </svg>
@@ -814,25 +1067,41 @@ function ChangelogTab({
                 {entry.added && entry.added.length > 0 && (
                   <div className="changelog-section">
                     <span className="section-label section-added">Added</span>
-                    <ul className="section-list">{entry.added.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                    <ul className="section-list">
+                      {entry.added.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {entry.changed && entry.changed.length > 0 && (
                   <div className="changelog-section">
                     <span className="section-label section-changed">Changed</span>
-                    <ul className="section-list">{entry.changed.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                    <ul className="section-list">
+                      {entry.changed.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {entry.fixed && entry.fixed.length > 0 && (
                   <div className="changelog-section">
                     <span className="section-label section-fixed">Fixed</span>
-                    <ul className="section-list">{entry.fixed.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                    <ul className="section-list">
+                      {entry.fixed.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {entry.removed && entry.removed.length > 0 && (
                   <div className="changelog-section">
                     <span className="section-label section-removed">Removed</span>
-                    <ul className="section-list">{entry.removed.map((item, i) => <li key={i}>{item}</li>)}</ul>
+                    <ul className="section-list">
+                      {entry.removed.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
                   </div>
                 )}
                 {entry.notes && <p className="changelog-notes">{entry.notes}</p>}
@@ -876,7 +1145,11 @@ function NotesTab({
   return (
     <div className="notes-tab">
       {!showForm ? (
-        <button className="btn-primary add-entity-btn" onClick={() => setShowForm(true)} data-tip="Create new note">
+        <button
+          className="btn-primary add-entity-btn"
+          onClick={() => setShowForm(true)}
+          data-tip="Create new note"
+        >
           + New Note
         </button>
       ) : (
@@ -886,19 +1159,30 @@ function NotesTab({
             className="note-input"
             placeholder="Note title"
             value={newTitle}
-            onChange={e => setNewTitle(e.target.value)}
+            onChange={(e) => setNewTitle(e.target.value)}
             autoFocus
           />
           <textarea
             className="note-textarea"
             placeholder="Note content..."
             value={newContent}
-            onChange={e => setNewContent(e.target.value)}
+            onChange={(e) => setNewContent(e.target.value)}
             rows={4}
           />
           <div className="note-form-actions">
-            <button className="btn-primary" onClick={handleAdd}>Save</button>
-            <button className="btn-secondary" onClick={() => { setShowForm(false); setNewTitle(''); setNewContent(''); }}>Cancel</button>
+            <button className="btn-primary" onClick={handleAdd}>
+              Save
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setShowForm(false);
+                setNewTitle('');
+                setNewContent('');
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -909,7 +1193,7 @@ function NotesTab({
         </div>
       ) : (
         <div className="notes-list">
-          {notes.map(note => (
+          {notes.map((note) => (
             <div key={note.id} className="note-item">
               <div className="note-header">
                 <h4 className="note-title">{note.title}</h4>
@@ -937,7 +1221,11 @@ function NotesTab({
                       </svg>
                     )}
                   </button>
-                  <button className="note-action-btn danger" onClick={() => onDeleteNote(note.id)} data-tip="Delete">
+                  <button
+                    className="note-action-btn danger"
+                    onClick={() => onDeleteNote(note.id)}
+                    data-tip="Delete"
+                  >
                     <svg viewBox="0 0 16 16" fill="currentColor">
                       <path d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM11.71 10.29L10.29 11.71L8 9.41L5.71 11.71L4.29 10.29L6.59 8L4.29 5.71L5.71 4.29L8 6.59L10.29 4.29L11.71 5.71L9.41 8L11.71 10.29Z" />
                     </svg>
@@ -948,7 +1236,7 @@ function NotesTab({
                 <textarea
                   className="note-edit-textarea"
                   value={editContent}
-                  onChange={e => setEditContent(e.target.value)}
+                  onChange={(e) => setEditContent(e.target.value)}
                   rows={4}
                   autoFocus
                 />

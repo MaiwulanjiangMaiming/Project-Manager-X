@@ -14,7 +14,7 @@ const migrations: Map<number, Migration> = new Map([
         }
       }
       return data;
-    }
+    },
   ],
   [
     2,
@@ -28,8 +28,8 @@ const migrations: Map<number, Migration> = new Map([
         }
       }
       return data;
-    }
-  ]
+    },
+  ],
 ]);
 
 export function runMigrations(data: StorageData, currentVersion: number): StorageData {

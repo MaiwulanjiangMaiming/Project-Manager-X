@@ -17,8 +17,8 @@ function clearHideTimer() {
   }
 }
 
-export function initTooltip() {
-  document.addEventListener('mouseover', (e: MouseEvent) => {
+export function initTooltip(): () => void {
+  const onMouseOver = (e: MouseEvent) => {
     const target = (e.target as HTMLElement).closest('[data-tip]') as HTMLElement | null;
     if (!target) return;
 
@@ -59,9 +59,9 @@ export function initTooltip() {
 
     el.style.top = `${top}px`;
     el.style.left = `${left}px`;
-  });
+  };
 
-  document.addEventListener('mouseout', (e: MouseEvent) => {
+  const onMouseOut = (e: MouseEvent) => {
     const target = (e.target as HTMLElement).closest('[data-tip]') as HTMLElement | null;
     if (!target) return;
 
@@ -73,5 +73,14 @@ export function initTooltip() {
       const el = getTooltipEl();
       el.classList.remove('visible');
     }, 80);
-  });
+  };
+
+  document.addEventListener('mouseover', onMouseOver);
+  document.addEventListener('mouseout', onMouseOut);
+
+  return () => {
+    document.removeEventListener('mouseover', onMouseOver);
+    document.removeEventListener('mouseout', onMouseOut);
+    clearHideTimer();
+  };
 }

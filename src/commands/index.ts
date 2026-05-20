@@ -4,7 +4,10 @@ import { registerProjectCommands } from './projectCommands';
 import { registerTaskCommands } from './taskCommands';
 import { registerWorkspaceCommands } from './workspaceCommands';
 
-export function registerAllCommands(ctx: vscode.ExtensionContext, container: Container): vscode.Disposable[] {
+export function registerAllCommands(
+  ctx: vscode.ExtensionContext,
+  container: Container
+): vscode.Disposable[] {
   return [
     ...registerProjectCommands(ctx, container),
     ...registerTaskCommands(ctx, container),

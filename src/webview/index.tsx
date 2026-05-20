@@ -12,18 +12,20 @@ class ErrorBoundary extends React.Component<
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  componentDidCatch(error: Error, _info: React.ErrorInfo) {
     const vscode = (window as any).acquireVsCodeApi?.();
     vscode?.postMessage({
       type: 'error:report',
-      data: { message: error.message, stack: error.stack }
+      data: { message: error.message, stack: error.stack },
     });
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--vscode-errorForeground)' }}>
+        <div
+          style={{ padding: '20px', textAlign: 'center', color: 'var(--vscode-errorForeground)' }}
+        >
           <h3>Something went wrong</h3>
           <p style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)' }}>
             {this.state.error?.message}
@@ -37,7 +39,7 @@ class ErrorBoundary extends React.Component<
               borderRadius: '4px',
               background: 'transparent',
               color: 'var(--vscode-focusBorder)',
-              cursor: 'pointer'
+              cursor: 'pointer',
             }}
           >
             Retry

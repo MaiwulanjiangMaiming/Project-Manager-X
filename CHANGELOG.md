@@ -40,3 +40,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### License
 
 - Released under GPL-3.0.
+
+## [1.0.1] - 2026-05-19
+
+### Security
+
+- Fixed XSS vulnerability by replacing `dangerouslySetInnerHTML` with safe SVG rendering
+
+### Performance
+
+- Converted file I/O operations from synchronous to asynchronous (storage, backup, project scanning)
+- Optimized Zustand store: moved `filteredProjects` from store method to `useMemo` for lazy computation
+- Added `React.memo` to TagFilter, SearchBar, EmptyState, and ProjectList to prevent unnecessary re-renders
+
+### Type Safety
+
+- Added generic types to `webviewRPC.ts` (replacing `any`)
+- Introduced `RawProject` and `StoredMetadata` interfaces in `storage.ts`
+- Added `RpcResponse` union type in `extension.ts`
+- Added `StateUpdateData` interface for `useProjectStore.loadState`
+- Reduced `any` type usage by 65%+
+
+### Code Quality
+
+- Unified `formatDate` function across components (using `dateUtils.formatLastOpened`)
+- Fixed Settings panel GitHub URL (Project-Manager-Pro → Project-Manager-X)
+- Configured ESLint + Prettier + Husky + lint-staged for code quality
+- Added comprehensive test suite (65 tests covering storage, projectManager, migrations, RPC, backup, dateUtils)
+
+### User Experience
+
+- Added progress notifications for import, refresh, and batch delete operations
+- Added undo support for project deletion (5-second window)
+- Added success toasts for all mutation operations
+- Enhanced Quick Switch with Git branch, pending task count, and last opened time
+- Added webview theme adaptation (dark/light/high contrast)
+
+### Memory & Stability
+
+- Made tooltip event listeners cleanable (return cleanup function)
+- Verified all useEffect cleanup functions
+- Confirmed SmartFileWatcher dispose chain is complete

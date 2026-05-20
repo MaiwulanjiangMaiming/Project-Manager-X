@@ -10,9 +10,16 @@ import * as path from 'path';
 import * as os from 'os';
 import { Storage } from './storage';
 import {
-  Project, Task, TaskStatus, Settings, DEFAULT_SETTINGS,
-  Tag, Milestone, ChangelogEntry, ContextSnapshot, Note,
-  inferLifecycle, PROJECT_ICONS
+  Project,
+  Task,
+  TaskStatus,
+  Settings,
+  Tag,
+  Milestone,
+  ChangelogEntry,
+  ContextSnapshot,
+  Note,
+  inferLifecycle,
 } from '../types';
 
 export class ProjectManager {
@@ -31,7 +38,7 @@ export class ProjectManager {
   getTasks(projectId?: string): Task[] {
     const tasks = this.storage.getTasks();
     if (projectId) {
-      return tasks.filter(t => t.projectId === projectId);
+      return tasks.filter((t) => t.projectId === projectId);
     }
     return tasks;
   }
@@ -57,26 +64,34 @@ export class ProjectManager {
   }
 
   async openProject(projectId: string, newWindow: boolean): Promise<void> {
-    const project = this.getProjects().find(p => p.id === projectId);
+    const project = this.getProjects().find((p) => p.id === projectId);
     if (!project) return;
 
     let uri: vscode.Uri;
     if (project.remote) {
       switch (project.remote.type) {
         case 'ssh':
-          uri = vscode.Uri.parse(`vscode-remote://ssh-remote+${project.remote.host}${project.path}`);
+          uri = vscode.Uri.parse(
+            `vscode-remote://ssh-remote+${project.remote.host}${project.path}`
+          );
           break;
         case 'docker':
-          uri = vscode.Uri.parse(`vscode-remote://attached-container+${project.remote.container}${project.path}`);
+          uri = vscode.Uri.parse(
+            `vscode-remote://attached-container+${project.remote.container}${project.path}`
+          );
           break;
         case 'wsl':
           uri = vscode.Uri.parse(`vscode-remote://wsl+${project.remote.host}${project.path}`);
           break;
         case 'devcontainer':
-          uri = vscode.Uri.parse(`vscode-remote://dev-container+${project.remote.container}${project.path}`);
+          uri = vscode.Uri.parse(
+            `vscode-remote://dev-container+${project.remote.container}${project.path}`
+          );
           break;
         case 'codespaces':
-          uri = vscode.Uri.parse(`vscode-remote://codespaces+${project.remote.host}${project.path}`);
+          uri = vscode.Uri.parse(
+            `vscode-remote://codespaces+${project.remote.host}${project.path}`
+          );
           break;
         default:
           uri = vscode.Uri.file(project.path);
@@ -115,7 +130,7 @@ export class ProjectManager {
     await this.updateProject(project);
   }
 
-  async saveCurrentProject(): Promise<void> {
+  async saveCurrentProject(): Promise<string | undefined> {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
       vscode.window.showWarningMessage('No workspace folder open');
@@ -126,7 +141,7 @@ export class ProjectManager {
     const name = path.basename(rootPath);
 
     const existing = this.getProjects();
-    if (existing.some(p => p.path === rootPath)) {
+    if (existing.some((p) => p.path === rootPath)) {
       vscode.window.showInformationMessage('Project already saved');
       return;
     }
@@ -139,31 +154,31 @@ export class ProjectManager {
       enabled: true,
       type: this.detectProjectType(rootPath),
       lifecycle: 'active',
-      lastOpened: Date.now()
+      lastOpened: Date.now(),
     };
 
     const projects = [...existing, project];
     await this.storage.saveProjects(projects);
-    vscode.window.showInformationMessage(`Project "${name}" saved`);
+    return name;
   }
 
   async deleteProject(projectId: string): Promise<void> {
     const projects = this.getProjects();
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find((p) => p.id === projectId);
     if (!project) return;
 
-    const tasks = this.getTasks().filter(t => t.projectId === projectId);
+    const tasks = this.getTasks().filter((t) => t.projectId === projectId);
     for (const task of tasks) {
       await this.storage.deleteTask(task.id);
     }
 
-    const updated = projects.filter(p => p.id !== projectId);
+    const updated = projects.filter((p) => p.id !== projectId);
     await this.storage.saveProjects(updated);
   }
 
   async updateProject(project: Project): Promise<void> {
     const projects = this.getProjects();
-    const index = projects.findIndex(p => p.id === project.id);
+    const index = projects.findIndex((p) => p.id === project.id);
     if (index === -1) return;
 
     projects[index] = { ...projects[index], ...project };
@@ -172,14 +187,14 @@ export class ProjectManager {
 
   async reorderProjects(reorderedProjects: Project[]): Promise<void> {
     const allProjects = this.getProjects();
-    const reorderedIds = new Set(reorderedProjects.map(p => p.id));
-    const untouched = allProjects.filter(p => !reorderedIds.has(p.id));
+    const reorderedIds = new Set(reorderedProjects.map((p) => p.id));
+    const untouched = allProjects.filter((p) => !reorderedIds.has(p.id));
     const finalProjects = [...reorderedProjects, ...untouched];
     await this.storage.saveProjects(finalProjects);
   }
 
   async moveProjectToTag(projectId: string, tagId: string): Promise<void> {
-    const project = this.getProjects().find(p => p.id === projectId);
+    const project = this.getProjects().find((p) => p.id === projectId);
     if (!project) return;
     if (!project.tags.includes(tagId)) {
       project.tags.push(tagId);
@@ -188,9 +203,9 @@ export class ProjectManager {
   }
 
   async removeProjectFromTag(projectId: string, tagId: string): Promise<void> {
-    const project = this.getProjects().find(p => p.id === projectId);
+    const project = this.getProjects().find((p) => p.id === projectId);
     if (!project) return;
-    project.tags = project.tags.filter(t => t !== tagId);
+    project.tags = project.tags.filter((t) => t !== tagId);
     await this.updateProject(project);
   }
 
@@ -199,7 +214,7 @@ export class ProjectManager {
       id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name,
       color,
-      order: this.getTags().length
+      order: this.getTags().length,
     };
     await this.storage.addTag(tag);
   }
@@ -214,7 +229,7 @@ export class ProjectManager {
     const projects = this.getProjects();
     for (const project of projects) {
       if (project.tags.includes(tagId)) {
-        project.tags = project.tags.filter(t => t !== tagId);
+        project.tags = project.tags.filter((t) => t !== tagId);
         await this.updateProject(project);
       }
     }
@@ -225,13 +240,13 @@ export class ProjectManager {
   }
 
   async showInFolder(projectId: string): Promise<void> {
-    const project = this.getProjects().find(p => p.id === projectId);
+    const project = this.getProjects().find((p) => p.id === projectId);
     if (!project) return;
     await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(project.path));
   }
 
   async addToWorkspace(projectId: string): Promise<void> {
-    const project = this.getProjects().find(p => p.id === projectId);
+    const project = this.getProjects().find((p) => p.id === projectId);
     if (!project) return;
     await vscode.workspace.updateWorkspaceFolders(
       vscode.workspace.workspaceFolders?.length || 0,
@@ -266,7 +281,7 @@ export class ProjectManager {
         category: category || 'feature',
         tags: [],
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       };
       await this.storage.addTask(newTask);
     } else {
@@ -280,7 +295,7 @@ export class ProjectManager {
         category: titleOrTask.category || 'feature',
         tags: titleOrTask.tags || [],
         createdAt: Date.now(),
-        updatedAt: Date.now()
+        updatedAt: Date.now(),
       };
       await this.storage.addTask(newTask);
     }
@@ -313,7 +328,7 @@ export class ProjectManager {
         totalTasks: 0,
         progress: 0,
         status: 'upcoming',
-        createdAt: Date.now()
+        createdAt: Date.now(),
       };
       await this.storage.addMilestone(milestone);
     } else {
@@ -340,7 +355,7 @@ export class ProjectManager {
       version,
       date: Date.now(),
       added: changes ? [changes] : [],
-      visibility: 'private'
+      visibility: 'private',
     };
     await this.storage.addChangelogEntry(entry);
   }
@@ -361,7 +376,7 @@ export class ProjectManager {
       content,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      tags: []
+      tags: [],
     };
     await this.storage.addNote(note);
   }
@@ -388,7 +403,7 @@ export class ProjectManager {
   }
 
   getLatestSnapshot(projectId: string): ContextSnapshot | undefined {
-    const snapshots = this.storage.getSnapshots().filter(s => s.projectId === projectId);
+    const snapshots = this.storage.getSnapshots().filter((s) => s.projectId === projectId);
     if (snapshots.length === 0) return undefined;
     return snapshots.sort((a, b) => b.timestamp - a.timestamp)[0];
   }
@@ -407,7 +422,7 @@ export class ProjectManager {
   async batchUpdateTaskStatus(taskIds: string[], status: TaskStatus): Promise<void> {
     const tasks = this.storage.getTasks();
     for (const id of taskIds) {
-      const task = tasks.find(t => t.id === id);
+      const task = tasks.find((t) => t.id === id);
       if (task) {
         task.status = status;
         task.updatedAt = Date.now();
@@ -422,15 +437,35 @@ export class ProjectManager {
     }
   }
 
+  async restoreProject(project: Project, tasks: Task[]): Promise<void> {
+    const projects = this.getProjects();
+    if (!projects.some((p) => p.id === project.id)) {
+      projects.push(project);
+      await this.storage.saveProjects(projects);
+    }
+    for (const task of tasks) {
+      const existing = this.getTasks().find((t) => t.id === task.id);
+      if (!existing) {
+        await this.storage.addTask(task);
+      }
+    }
+  }
+
   private detectProjectType(rootPath: string): Project['type'] {
     if (fs.existsSync(path.join(rootPath, '.git'))) return 'git';
     if (fs.existsSync(path.join(rootPath, 'package.json'))) return 'any';
     if (fs.existsSync(path.join(rootPath, 'Cargo.toml'))) return 'any';
     if (fs.existsSync(path.join(rootPath, 'go.mod'))) return 'any';
-    if (fs.existsSync(path.join(rootPath, 'requirements.txt')) ||
-        fs.existsSync(path.join(rootPath, 'pyproject.toml'))) return 'any';
-    if (fs.existsSync(path.join(rootPath, 'pom.xml')) ||
-        fs.existsSync(path.join(rootPath, 'build.gradle'))) return 'any';
+    if (
+      fs.existsSync(path.join(rootPath, 'requirements.txt')) ||
+      fs.existsSync(path.join(rootPath, 'pyproject.toml'))
+    )
+      return 'any';
+    if (
+      fs.existsSync(path.join(rootPath, 'pom.xml')) ||
+      fs.existsSync(path.join(rootPath, 'build.gradle'))
+    )
+      return 'any';
     return 'any';
   }
 
@@ -439,10 +474,25 @@ export class ProjectManager {
     const suggestions: string[] = [];
 
     const commonFolders = [
-      'Projects', 'projects', 'Workspace', 'workspace',
-      'Code', 'code', 'Dev', 'dev', 'Development', 'development',
-      'GitHub', 'github', 'GitLab', 'gitlab',
-      'Source', 'source', 'Repos', 'repos', 'Repositories'
+      'Projects',
+      'projects',
+      'Workspace',
+      'workspace',
+      'Code',
+      'code',
+      'Dev',
+      'dev',
+      'Development',
+      'development',
+      'GitHub',
+      'github',
+      'GitLab',
+      'gitlab',
+      'Source',
+      'source',
+      'Repos',
+      'repos',
+      'Repositories',
     ];
 
     for (const folder of commonFolders) {
@@ -455,7 +505,11 @@ export class ProjectManager {
     return suggestions;
   }
 
-  private async findGitRepos(dir: string, maxDepth: number, currentDepth: number = 0): Promise<Project[]> {
+  private async findGitRepos(
+    dir: string,
+    maxDepth: number,
+    currentDepth: number = 0
+  ): Promise<Project[]> {
     if (currentDepth >= maxDepth) return [];
 
     const projects: Project[] = [];
@@ -469,40 +523,47 @@ export class ProjectManager {
         tags: [],
         enabled: true,
         type: 'git',
-        lifecycle: inferLifecycle(Date.now())
+        lifecycle: inferLifecycle(Date.now()),
       });
       return projects;
     }
 
     try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.isDirectory() &&
-            !entry.name.startsWith('.') &&
-            entry.name !== 'node_modules' &&
-            entry.name !== 'vendor' &&
-            entry.name !== 'dist' &&
-            entry.name !== 'build' &&
-            entry.name !== 'out' &&
-            entry.name !== '__pycache__') {
+        if (
+          entry.isDirectory() &&
+          !entry.name.startsWith('.') &&
+          entry.name !== 'node_modules' &&
+          entry.name !== 'vendor' &&
+          entry.name !== 'dist' &&
+          entry.name !== 'build' &&
+          entry.name !== 'out' &&
+          entry.name !== '__pycache__'
+        ) {
           const subDir = path.join(dir, entry.name);
           const subProjects = await this.findGitRepos(subDir, maxDepth, currentDepth + 1);
           projects.push(...subProjects);
         }
       }
-    } catch (e) {
+    } catch {
+      /* ignore */
     }
 
     return projects;
   }
 
-  private async findVSCodeWorkspaces(dir: string, maxDepth: number, currentDepth: number = 0): Promise<Project[]> {
+  private async findVSCodeWorkspaces(
+    dir: string,
+    maxDepth: number,
+    currentDepth: number = 0
+  ): Promise<Project[]> {
     if (currentDepth >= maxDepth) return [];
 
     const projects: Project[] = [];
 
     try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isFile() && entry.name.endsWith('.code-workspace')) {
           const workspacePath = path.join(dir, entry.name);
@@ -514,17 +575,20 @@ export class ProjectManager {
             tags: [],
             enabled: true,
             type: 'vscode',
-            lifecycle: inferLifecycle(Date.now())
+            lifecycle: inferLifecycle(Date.now()),
           });
-        } else if (entry.isDirectory() &&
-                   !entry.name.startsWith('.') &&
-                   entry.name !== 'node_modules') {
+        } else if (
+          entry.isDirectory() &&
+          !entry.name.startsWith('.') &&
+          entry.name !== 'node_modules'
+        ) {
           const subDir = path.join(dir, entry.name);
           const subProjects = await this.findVSCodeWorkspaces(subDir, maxDepth, currentDepth + 1);
           projects.push(...subProjects);
         }
       }
-    } catch (e) {
+    } catch {
+      /* ignore */
     }
 
     return projects;
@@ -535,10 +599,10 @@ export class ProjectManager {
     const detected: Project[] = [];
     const detectedPaths = new Set<string>();
 
-    let foldersToScan: string[] = [];
+    let foldersToScan: string[];
 
     if (settings.gitBaseFolders.length > 0) {
-      foldersToScan = settings.gitBaseFolders.map(f => f.replace(/^~/, os.homedir()));
+      foldersToScan = settings.gitBaseFolders.map((f) => f.replace(/^~/, os.homedir()));
     } else {
       foldersToScan = this.getSuggestedFolders();
     }
@@ -546,14 +610,15 @@ export class ProjectManager {
     if (foldersToScan.length === 0) {
       const home = os.homedir();
       try {
-        const entries = fs.readdirSync(home, { withFileTypes: true });
+        const entries = await fs.promises.readdir(home, { withFileTypes: true });
         for (const entry of entries) {
           if (entry.isDirectory() && !entry.name.startsWith('.')) {
             const fullPath = path.join(home, entry.name);
             foldersToScan.push(fullPath);
           }
         }
-      } catch (e) {
+      } catch {
+        /* ignore */
       }
     }
 
@@ -600,20 +665,23 @@ export class ProjectManager {
       canSelectFolders: true,
       canSelectMany: false,
       defaultUri: vscode.Uri.file(home),
-      openLabel: 'Select Folder to Scan'
+      openLabel: 'Select Folder to Scan',
     });
 
     if (!result || result.length === 0) return;
 
     const folderPath = result[0].fsPath;
 
-    const detected = await vscode.window.withProgress({
-      location: vscode.ProgressLocation.Notification,
-      title: `Scanning ${path.basename(folderPath)}...`,
-      cancellable: false
-    }, async () => {
-      return this.findGitRepos(folderPath, 3);
-    });
+    const detected = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Scanning ${path.basename(folderPath)}...`,
+        cancellable: false,
+      },
+      async () => {
+        return this.findGitRepos(folderPath, 3);
+      }
+    );
 
     if (detected.length === 0) {
       vscode.window.showInformationMessage('No Git repositories found in selected folder');
@@ -621,32 +689,34 @@ export class ProjectManager {
     }
 
     const existing = this.getProjects();
-    const newDetected = detected.filter(d => !existing.some(e => e.path === d.path));
+    const newDetected = detected.filter((d) => !existing.some((e) => e.path === d.path));
 
     if (newDetected.length === 0) {
       vscode.window.showInformationMessage('All detected projects are already saved');
       return;
     }
 
-    const items = newDetected.map(p => ({
+    const items = newDetected.map((p) => ({
       label: `$(repo) ${p.name}`,
       description: p.path,
       picked: true,
-      project: p
+      project: p,
     }));
 
     const selected = await vscode.window.showQuickPick(items, {
       canPickMany: true,
-      placeHolder: `Select projects to add (${newDetected.length} found)`
+      placeHolder: `Select projects to add (${newDetected.length} found)`,
     });
 
     if (!selected || selected.length === 0) return;
 
-    const projectsToAdd = selected.map(s => s.project);
+    const projectsToAdd = selected.map((s) => s.project);
     const allProjects = [...existing, ...projectsToAdd];
     await this.storage.saveProjects(allProjects);
 
-    vscode.window.showInformationMessage(`Added ${projectsToAdd.length} project${projectsToAdd.length !== 1 ? 's' : ''}`);
+    vscode.window.showInformationMessage(
+      `Added ${projectsToAdd.length} project${projectsToAdd.length !== 1 ? 's' : ''}`
+    );
   }
 
   private getIDEPaths(): { name: string; paths: string[] }[] {
@@ -658,33 +728,81 @@ export class ProjectManager {
         {
           name: 'VS Code',
           paths: [
-            path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'Library',
+              'Application Support',
+              'Code',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'VS Code Insiders',
           paths: [
-            path.join(home, 'Library', 'Application Support', 'Code - Insiders', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'Library',
+              'Application Support',
+              'Code - Insiders',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'Trae',
           paths: [
-            path.join(home, 'Library', 'Application Support', 'Trae', 'User', 'globalStorage', 'alefragnani.project-manager'),
-            path.join(home, 'Library', 'Application Support', 'Trae CN', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'Library',
+              'Application Support',
+              'Trae',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+            path.join(
+              home,
+              'Library',
+              'Application Support',
+              'Trae CN',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'Cursor',
           paths: [
-            path.join(home, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'Library',
+              'Application Support',
+              'Cursor',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'Windsurf',
           paths: [
-            path.join(home, 'Library', 'Application Support', 'Windsurf', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'Library',
+              'Application Support',
+              'Windsurf',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
       ];
     } else if (platform === 'win32') {
@@ -692,21 +810,53 @@ export class ProjectManager {
         {
           name: 'VS Code',
           paths: [
-            path.join(home, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'AppData',
+              'Roaming',
+              'Code',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'VS Code Insiders',
           paths: [
-            path.join(home, 'AppData', 'Roaming', 'Code - Insiders', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'AppData',
+              'Roaming',
+              'Code - Insiders',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'Trae',
           paths: [
-            path.join(home, 'AppData', 'Roaming', 'Trae', 'User', 'globalStorage', 'alefragnani.project-manager'),
-            path.join(home, 'AppData', 'Roaming', 'Trae CN', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              'AppData',
+              'Roaming',
+              'Trae',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+            path.join(
+              home,
+              'AppData',
+              'Roaming',
+              'Trae CN',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
       ];
     } else {
@@ -714,21 +864,49 @@ export class ProjectManager {
         {
           name: 'VS Code',
           paths: [
-            path.join(home, '.config', 'Code', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              '.config',
+              'Code',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'VS Code Insiders',
           paths: [
-            path.join(home, '.config', 'Code - Insiders', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              '.config',
+              'Code - Insiders',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
         {
           name: 'Trae',
           paths: [
-            path.join(home, '.config', 'Trae', 'User', 'globalStorage', 'alefragnani.project-manager'),
-            path.join(home, '.config', 'Trae CN', 'User', 'globalStorage', 'alefragnani.project-manager'),
-          ]
+            path.join(
+              home,
+              '.config',
+              'Trae',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+            path.join(
+              home,
+              '.config',
+              'Trae CN',
+              'User',
+              'globalStorage',
+              'alefragnani.project-manager'
+            ),
+          ],
         },
       ];
     }
@@ -755,7 +933,7 @@ export class ProjectManager {
       sourceName = foundSources[0].name;
     } else if (foundSources.length > 1) {
       const picked = await vscode.window.showQuickPick(
-        foundSources.map(s => ({ label: s.name, description: s.path, path: s.path })),
+        foundSources.map((s) => ({ label: s.name, description: s.path, path: s.path })),
         { placeHolder: 'Select IDE to import from' }
       );
       if (picked) {
@@ -771,8 +949,8 @@ export class ProjectManager {
         canSelectFolders: false,
         canSelectMany: false,
         defaultUri: vscode.Uri.file(home),
-        filters: { 'JSON': ['json'] },
-        openLabel: 'Select projects.json'
+        filters: { JSON: ['json'] },
+        openLabel: 'Select projects.json',
       });
 
       if (result && result.length > 0) {
@@ -787,7 +965,7 @@ export class ProjectManager {
     }
 
     try {
-      const content = fs.readFileSync(foundPath, 'utf8');
+      const content = await fs.promises.readFile(foundPath, 'utf8');
       const data = JSON.parse(content);
 
       if (!Array.isArray(data)) {
@@ -801,8 +979,10 @@ export class ProjectManager {
       for (const item of data) {
         if (!item.name || !item.rootPath) continue;
 
-        let projectPath = item.rootPath.replace(/^~/, os.homedir()).replace(/^\$home/, os.homedir());
-        if (existing.some(e => e.path === projectPath)) continue;
+        let projectPath = item.rootPath
+          .replace(/^~/, os.homedir())
+          .replace(/^\$home/, os.homedir());
+        if (existing.some((e) => e.path === projectPath)) continue;
 
         let projectType: Project['type'] = 'any';
         let remoteInfo: Project['remote'] = undefined;
@@ -901,19 +1081,19 @@ export class ProjectManager {
           type: projectType,
           remote: remoteInfo,
           lifecycle: inferLifecycle(Date.now()),
-          lastOpened: item.lastOpened
+          lastOpened: item.lastOpened,
         };
 
         if (item.tags && Array.isArray(item.tags) && item.tags.length > 0) {
           const currentTags = this.getTags();
           for (const tagName of item.tags) {
-            let tag = currentTags.find(t => t.name.toLowerCase() === tagName.toLowerCase());
+            let tag = currentTags.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
             if (!tag) {
               tag = {
                 id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 name: tagName,
                 color: this.getRandomColor(),
-                order: currentTags.length
+                order: currentTags.length,
               };
               await this.storage.addTag(tag);
             }
@@ -929,24 +1109,26 @@ export class ProjectManager {
         return;
       }
 
-      const items = candidates.map(p => ({
+      const items = candidates.map((p) => ({
         label: `$(repo) ${p.name}`,
         description: p.path,
         picked: true,
-        project: p
+        project: p,
       }));
 
       const selected = await vscode.window.showQuickPick(items, {
         canPickMany: true,
-        placeHolder: `Select projects to import from ${sourceName} (${candidates.length} found)`
+        placeHolder: `Select projects to import from ${sourceName} (${candidates.length} found)`,
       });
 
       if (!selected || selected.length === 0) return;
 
-      const imported = selected.map(s => s.project);
+      const imported = selected.map((s) => s.project);
       const allProjects = [...existing, ...imported];
       await this.storage.saveProjects(allProjects);
-      vscode.window.showInformationMessage(`Imported ${imported.length} project${imported.length !== 1 ? 's' : ''} from ${sourceName}`);
+      vscode.window.showInformationMessage(
+        `Imported ${imported.length} project${imported.length !== 1 ? 's' : ''} from ${sourceName}`
+      );
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to import: ${error}`);
     }
@@ -954,8 +1136,16 @@ export class ProjectManager {
 
   private getRandomColor(): string {
     const colors = [
-      '#FF6B6B', '#4ECDC4', '#FFE66D', '#95E1D3', '#F38181',
-      '#AA96DA', '#FCBAD3', '#A8D8EA', '#96CEB4', '#FECA57'
+      '#FF6B6B',
+      '#4ECDC4',
+      '#FFE66D',
+      '#95E1D3',
+      '#F38181',
+      '#AA96DA',
+      '#FCBAD3',
+      '#A8D8EA',
+      '#96CEB4',
+      '#FECA57',
     ];
     return colors[Math.floor(Math.random() * colors.length)];
   }

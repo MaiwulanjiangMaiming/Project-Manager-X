@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Project, Tag } from '../../types';
 import ProjectCard from './ProjectCard';
 import { useKeyboardNav } from '../hooks/useKeyboardNav';
-import { ProjectListSkeleton } from './SkeletonLoader';
 
 interface ProjectListProps {
   projects: Project[];
@@ -22,7 +21,7 @@ interface ProjectListProps {
   onOpenDetail: (projectId: string) => void;
 }
 
-export default function ProjectList({
+function ProjectList({
   projects,
   tags,
   groupByTag,
@@ -37,13 +36,14 @@ export default function ProjectList({
   onReorderProjects,
   onShowInFolder,
   onAddToWorkspace,
-  onOpenDetail
+  onOpenDetail,
 }: ProjectListProps) {
   const [draggedProject, setDraggedProject] = useState<string | null>(null);
 
   const flatProjects = groupByTag
-    ? tags.flatMap(tag => projects.filter(p => p.tags.includes(tag.id)))
-        .concat(projects.filter(p => p.tags.length === 0))
+    ? tags
+        .flatMap((tag) => projects.filter((p) => p.tags.includes(tag.id)))
+        .concat(projects.filter((p) => p.tags.length === 0))
     : projects;
 
   const { focusedIndex, setFocusedIndex } = useKeyboardNav({
@@ -79,8 +79,8 @@ export default function ProjectList({
 
     if (draggedProject && draggedProject !== targetProjectId) {
       const newProjects = [...projects];
-      const draggedIndex = newProjects.findIndex(p => p.id === draggedProject);
-      const targetIndex = newProjects.findIndex(p => p.id === targetProjectId);
+      const draggedIndex = newProjects.findIndex((p) => p.id === draggedProject);
+      const targetIndex = newProjects.findIndex((p) => p.id === targetProjectId);
 
       if (draggedIndex !== -1 && targetIndex !== -1) {
         const [removed] = newProjects.splice(draggedIndex, 1);
@@ -122,11 +122,13 @@ export default function ProjectList({
   );
 
   if (groupByTag) {
-    const untagged = projects.filter(p => p.tags.length === 0);
-    const taggedGroups = tags.map(tag => ({
-      tag,
-      projects: projects.filter(p => p.tags.includes(tag.id))
-    })).filter(g => g.projects.length > 0);
+    const untagged = projects.filter((p) => p.tags.length === 0);
+    const taggedGroups = tags
+      .map((tag) => ({
+        tag,
+        projects: projects.filter((p) => p.tags.includes(tag.id)),
+      }))
+      .filter((g) => g.projects.length > 0);
 
     let runningIndex = 0;
 
@@ -140,7 +142,12 @@ export default function ProjectList({
               <div className="project-group-header" style={{ color: tag.color }}>
                 <span className="group-dot" style={{ backgroundColor: tag.color }} />
                 {tag.name}
-                <span className="group-count" data-tip={`${tagProjects.length} project${tagProjects.length !== 1 ? 's' : ''}`}>{tagProjects.length}</span>
+                <span
+                  className="group-count"
+                  data-tip={`${tagProjects.length} project${tagProjects.length !== 1 ? 's' : ''}`}
+                >
+                  {tagProjects.length}
+                </span>
               </div>
               <div className="project-group-content">
                 {tagProjects.map((p, i) => renderProjectCard(p, startIdx + i))}
@@ -151,9 +158,17 @@ export default function ProjectList({
         {untagged.length > 0 && (
           <div className="project-group">
             <div className="project-group-header">
-              <span className="group-dot" style={{ backgroundColor: 'var(--vscode-descriptionForeground)' }} />
+              <span
+                className="group-dot"
+                style={{ backgroundColor: 'var(--vscode-descriptionForeground)' }}
+              />
               Untagged
-              <span className="group-count" data-tip={`${untagged.length} project${untagged.length !== 1 ? 's' : ''}`}>{untagged.length}</span>
+              <span
+                className="group-count"
+                data-tip={`${untagged.length} project${untagged.length !== 1 ? 's' : ''}`}
+              >
+                {untagged.length}
+              </span>
             </div>
             <div className="project-group-content">
               {untagged.map((p, i) => renderProjectCard(p, runningIndex + i))}
@@ -170,3 +185,5 @@ export default function ProjectList({
     </div>
   );
 }
+
+export default memo(ProjectList);
