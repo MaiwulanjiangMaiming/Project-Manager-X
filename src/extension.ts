@@ -63,19 +63,25 @@ export function activate(context: vscode.ExtensionContext) {
 
   const projectsFilePath = container.projectManager.getProjectsFilePath();
   const watcher = vscode.workspace.createFileSystemWatcher(projectsFilePath);
-  watcher.onDidChange(() => {
-    container.projectManager.invalidateCache();
+  // Use the smart watcher's debounce (with maxWait safety net) for all three
+  // events. Previously each event both invalidated the cache AND triggered
+  // an immediate provider.refresh(), which on macOS FSEvents could read the
+  // file mid-write and surface an empty project list. Now we only notify the
+  // watcher, which coalesces the burst and re-reads after the file settles.
+  const onAnyChange = () => {
     container.fileWatcher.notifyChange();
-    provider.refresh();
-  });
-  watcher.onDidCreate(() => {
-    container.projectManager.invalidateCache();
-    provider.refresh();
-  });
+  };
+  watcher.onDidChange(onAnyChange);
+  watcher.onDidCreate(onAnyChange);
+  watcher.onDidDelete(onAnyChange);
   context.subscriptions.push(watcher);
 
-  container.fileWatcher.onChange = () => {
-    container.projectManager.invalidateCache();
+  container.fileWatcher.onChange = async () => {
+    // Force-reload the projects from disk through the retry-aware path. This
+    // also tolerates brief partial-write windows if a non-atomic write is
+    // somehow still in flight (e.g. third-party IDEs that don't use the
+    // atomic temp+rename pattern).
+    await container.projectManager.forceReloadProjects();
     provider.refresh();
   };
 

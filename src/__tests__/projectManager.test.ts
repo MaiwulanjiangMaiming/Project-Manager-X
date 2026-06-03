@@ -69,6 +69,7 @@ function createMockStorage(): Storage {
     }),
     getProjectsFilePath: vi.fn(() => '/mock/projects.json'),
     invalidateCache: vi.fn(),
+    forceReloadProjects: vi.fn(async () => projects),
     getData: vi.fn(() => ({
       projects,
       tasks,
@@ -232,6 +233,35 @@ describe('ProjectManager', () => {
         expect.anything(),
         true
       );
+    });
+  });
+
+  describe('forceReloadProjects', () => {
+    it('should delegate to storage and return the reloaded list', async () => {
+      const reloaded: Project[] = [
+        {
+          id: 'p1',
+          name: 'Reloaded',
+          path: '/p1',
+          tags: [],
+          enabled: true,
+          lastOpened: 0,
+          type: 'any',
+          lifecycle: 'active',
+        },
+      ];
+      (mockStorage.forceReloadProjects as any).mockResolvedValueOnce(reloaded);
+
+      const result = await manager.forceReloadProjects();
+
+      expect(mockStorage.forceReloadProjects).toHaveBeenCalledTimes(1);
+      expect(result).toEqual(reloaded);
+    });
+
+    it('refreshProjects should also force a disk reload (not just toast)', async () => {
+      (mockStorage.forceReloadProjects as any).mockClear();
+      await manager.refreshProjects();
+      expect(mockStorage.forceReloadProjects).toHaveBeenCalledTimes(1);
     });
   });
 
