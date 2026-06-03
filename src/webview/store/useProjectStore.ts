@@ -167,6 +167,25 @@ export const useProjectStore = create<ProjectStore>()(
         ...p,
         lifecycle: inferLifecycle(p.lastOpened, p.lifecycleOverride),
       }));
+      // Preserve UI-only state across extension-driven state updates so a
+      // file-sync refresh does not stomp on the user's selected project,
+      // active search, tag filter, sort mode, view density, or the
+      // multi-select manage-mode set. Only data fields are overwritten.
+      const current = get();
+
+      // If the previously selected project no longer exists in the freshly
+      // synced list, drop the selection so the UI does not show a stale
+      // detail pane. Same for any IDs in the multi-select set.
+      const projectIds = new Set(projects.map((p) => p.id));
+      const nextSelectedProjectId = current.selectedProjectId
+        ? projectIds.has(current.selectedProjectId)
+          ? current.selectedProjectId
+          : null
+        : null;
+      const nextSelectedProjectIds = new Set(
+        Array.from(current.selectedProjectIds).filter((id) => projectIds.has(id))
+      );
+
       set({
         projects,
         tasks: data.tasks || [],
@@ -176,6 +195,14 @@ export const useProjectStore = create<ProjectStore>()(
         notes: data.notes || [],
         tags: data.tags || [],
         settings: data.settings || DEFAULT_SETTINGS,
+        selectedProjectId: nextSelectedProjectId,
+        searchQuery: current.searchQuery,
+        selectedTag: current.selectedTag,
+        sortBy: current.sortBy,
+        viewMode: current.viewMode,
+        showGlobalTasks: current.showGlobalTasks,
+        isManageMode: current.isManageMode,
+        selectedProjectIds: nextSelectedProjectIds,
       });
     },
   }))
