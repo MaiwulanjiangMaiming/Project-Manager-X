@@ -127,8 +127,78 @@ export class Storage {
         health: item.health,
       }));
     } catch {
-      return [];
+      // Partial-write window: another IDE may be mid-write. The watcher in
+      // extension.ts will call this again on the next tick, so we keep the
+      // previous in-memory cache (do not invalidate here) and let the next
+      // event fix the read. This avoids the "blanks out the list" symptom
+      // when IDE A is saving while IDE B is reading.
+      return this.cache ? this.cache.projects : [];
     }
+  }
+
+  /**
+   * Reload projects.json from disk without touching the in-memory cache.
+   * Retries a few times if the file is in a partial-write state, since
+   * non-atomic writes from other IDEs can produce invalid JSON for a few ms.
+   * The number of attempts and the delay are conservative on purpose:
+   * editors usually settle in under 200ms, but network drives can be slower.
+   */
+  async forceReloadProjects(options?: { attempts?: number; delayMs?: number }): Promise<Project[]> {
+    const attempts = options?.attempts ?? 5;
+    const delayMs = options?.delayMs ?? 50;
+
+    let lastError: unknown = null;
+    for (let i = 0; i < attempts; i++) {
+      if (!fs.existsSync(this.projectsFilePath)) {
+        return [];
+      }
+      try {
+        const content = fs.readFileSync(this.projectsFilePath, 'utf-8');
+        const raw = JSON.parse(content);
+        if (!Array.isArray(raw)) {
+          throw new Error('Root is not an array');
+        }
+        const result = ProjectsFileSchema.safeParse(raw);
+        if (!result.success) {
+          throw new Error('Schema validation failed');
+        }
+        const projects = result.data.map((item: RawProject) => ({
+          id: item.id || Date.now().toString(),
+          name: item.name || '',
+          path: item.path || item.rootPath || '',
+          tags: item.tags || [],
+          enabled: item.enabled !== false,
+          lastOpened: item.lastOpened || 0,
+          type: (item.type || 'any') as ProjectType,
+          lifecycle: (item.lifecycle || 'active') as ProjectLifecycle,
+          lifecycleOverride: item.lifecycleOverride as ProjectLifecycle | undefined,
+          remote: item.remote,
+          health: item.health,
+        }));
+        this.cache = {
+          projects,
+          tasks: this.cache?.tasks ?? [],
+          milestones: this.cache?.milestones ?? [],
+          changelog: this.cache?.changelog ?? [],
+          snapshots: this.cache?.snapshots ?? [],
+          notes: this.cache?.notes ?? [],
+          tags: this.cache?.tags ?? [...DEFAULT_TAGS],
+          settings: this.cache?.settings ?? { ...DEFAULT_SETTINGS },
+        };
+        return projects;
+      } catch (e) {
+        lastError = e;
+        if (i < attempts - 1) {
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      }
+    }
+    vscode.window.showErrorMessage(
+      `Project Manager X: failed to read projects.json after ${attempts} attempts. Keeping previous data. (${String(
+        lastError
+      )})`
+    );
+    return this.cache ? this.cache.projects : [];
   }
 
   private async saveProjectsToFile(projects: Project[]): Promise<void> {
@@ -136,7 +206,23 @@ export class Storage {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    await fs.promises.writeFile(this.projectsFilePath, JSON.stringify(projects, null, 2), 'utf-8');
+    // Atomic write: write to a sibling temp file, then rename over the target.
+    // rename() is atomic on the same filesystem, so other IDEs (or other
+    // windows of the same IDE) will only ever see the old complete file or
+    // the new complete file — never a partially-written one.
+    const tmpPath = `${this.projectsFilePath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      await fs.promises.writeFile(tmpPath, JSON.stringify(projects, null, 2), 'utf-8');
+      await fs.promises.rename(tmpPath, this.projectsFilePath);
+    } catch (e) {
+      // Best-effort cleanup of the temp file on failure.
+      try {
+        await fs.promises.unlink(tmpPath);
+      } catch {
+        // ignore
+      }
+      throw e;
+    }
   }
 
   private getDataInner(): StorageData {

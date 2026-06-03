@@ -19,14 +19,23 @@ vi.mock('fs', () => {
   const readFileSync = vi.fn();
   const mkdirSync = vi.fn();
   const writeFile = vi.fn().mockResolvedValue(undefined);
+  const rename = vi.fn().mockResolvedValue(undefined);
+  const unlink = vi.fn().mockResolvedValue(undefined);
   return {
     existsSync,
     readFileSync,
     mkdirSync,
     promises: {
       writeFile,
+      rename,
+      unlink,
     },
-    default: { existsSync, readFileSync, mkdirSync, promises: { writeFile } },
+    default: {
+      existsSync,
+      readFileSync,
+      mkdirSync,
+      promises: { writeFile, rename, unlink },
+    },
   };
 });
 
@@ -377,5 +386,80 @@ describe('Storage', () => {
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
       'Project data validation failed. Using empty project list.'
     );
+  });
+
+  it('should keep previous projects on partial-write JSON during sync read', () => {
+    // Pre-seed the cache with one valid project so the partial-write catch path
+    // has something to fall back to.
+    const seeded = [mockProject({ id: 'p1', name: 'Seeded' })];
+    (fs.existsSync as any).mockReturnValue(true);
+    (fs.readFileSync as any).mockReturnValueOnce(JSON.stringify(seeded));
+    storage = new Storage(mockContext);
+    expect(storage.getProjects()).toHaveLength(1);
+
+    // Now simulate another IDE writing the file mid-write: readFileSync returns
+    // an unparseable blob. The old code would silently return [] here, which is
+    // the bug we are fixing.
+    (fs.readFileSync as any).mockReturnValueOnce('[ { "id": "p2", "name":');
+    // No cache invalidation between the two reads; the file watcher is what
+    // triggers the re-read, and it does not call invalidateCache in the
+    // partial-write path.
+    const projects = storage.getProjects();
+    expect(projects).toHaveLength(1);
+    expect(projects[0].id).toBe('p1');
+  });
+
+  it('forceReloadProjects should read from disk and retry on partial JSON', async () => {
+    const valid = [mockProject({ id: 'p1' }), mockProject({ id: 'p2' })];
+    (fs.existsSync as any).mockReturnValue(true);
+    // First two attempts: invalid JSON (simulating mid-write). Third: valid.
+    (fs.readFileSync as any)
+      .mockReturnValueOnce('[ { "id": "p1"')
+      .mockReturnValueOnce('[ { "id": "p1"')
+      .mockReturnValueOnce(JSON.stringify(valid));
+
+    storage = new Storage(mockContext);
+    const projects = await storage.forceReloadProjects({ attempts: 3, delayMs: 1 });
+
+    expect(projects).toHaveLength(2);
+    expect(fs.readFileSync).toHaveBeenCalledTimes(3);
+  });
+
+  it('forceReloadProjects should show error and keep cache after all attempts fail', async () => {
+    const seeded = [mockProject({ id: 'p1' })];
+    (fs.existsSync as any).mockReturnValue(true);
+    (fs.readFileSync as any).mockReturnValueOnce(JSON.stringify(seeded));
+    storage = new Storage(mockContext);
+    storage.getProjects(); // warm cache
+
+    (fs.readFileSync as any).mockReset();
+    (fs.readFileSync as any).mockReturnValue('not even close to json');
+    (vscode.window.showErrorMessage as any).mockClear();
+
+    const projects = await storage.forceReloadProjects({ attempts: 2, delayMs: 1 });
+
+    expect(projects).toHaveLength(1);
+    expect(projects[0].id).toBe('p1');
+    expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+  });
+
+  it('saveProjects should write atomically via temp file + rename', async () => {
+    (fs.existsSync as any).mockReturnValue(false);
+    (fs.mkdirSync as any).mockImplementation(() => undefined);
+    (fs.promises.writeFile as any).mockResolvedValue(undefined);
+    (fs.promises.rename as any).mockResolvedValue(undefined);
+
+    await storage.saveProjects([mockProject({ id: 'p1' })]);
+
+    expect(fs.promises.writeFile).toHaveBeenCalledTimes(1);
+    // The write must be to a .tmp file, not the final path directly.
+    const writeArgs = (fs.promises.writeFile as any).mock.calls[0];
+    expect(writeArgs[0]).toMatch(/\.tmp$/);
+    expect(writeArgs[0]).not.toBe(storage.getProjectsFilePath());
+    // The temp file must be renamed over the real path.
+    expect(fs.promises.rename).toHaveBeenCalledTimes(1);
+    const renameArgs = (fs.promises.rename as any).mock.calls[0];
+    expect(renameArgs[0]).toMatch(/\.tmp$/);
+    expect(renameArgs[1]).toBe(storage.getProjectsFilePath());
   });
 });
