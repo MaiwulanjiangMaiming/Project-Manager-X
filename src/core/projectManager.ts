@@ -59,6 +59,17 @@ export class ProjectManager {
     this.storage.invalidateCache();
   }
 
+  /**
+   * Force a re-read of projects.json from disk, retrying through the
+   * brief partial-write window that happens when another IDE saves the
+   * same file. Replaces the old `refreshProjects` placeholder that only
+   * invalidated the cache and showed a toast. The caller is responsible
+   * for pushing the result to the webview.
+   */
+  async forceReloadProjects(): Promise<Project[]> {
+    return this.storage.forceReloadProjects();
+  }
+
   getStorageData(): any {
     return this.storage.getData();
   }
@@ -654,8 +665,10 @@ export class ProjectManager {
   }
 
   async refreshProjects(): Promise<void> {
-    this.storage.invalidateCache();
-    vscode.window.showInformationMessage('Projects refreshed');
+    // Real reload: force a disk read with retry, so a partial-write window
+    // doesn't surface an empty list. The caller (extension.ts handler)
+    // pushes the result to the webview after this returns.
+    await this.storage.forceReloadProjects();
   }
 
   async addDetectFolder(): Promise<void> {
