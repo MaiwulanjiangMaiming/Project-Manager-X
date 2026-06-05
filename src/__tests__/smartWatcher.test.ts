@@ -92,12 +92,12 @@ describe('SmartFileWatcher', () => {
     const writeFn = vi.fn();
     const w = new SmartFileWatcher();
 
-    w.write('hello', writeFn);
-    w.write('hello', writeFn);
-    w.write('hello', writeFn);
+    w.write('projects', 'hello', writeFn);
+    w.write('projects', 'hello', writeFn);
+    w.write('projects', 'hello', writeFn);
     expect(writeFn).toHaveBeenCalledTimes(1);
 
-    w.write('world', writeFn);
+    w.write('projects', 'world', writeFn);
     expect(writeFn).toHaveBeenCalledTimes(2);
   });
 

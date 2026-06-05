@@ -37,9 +37,12 @@ export interface SmartWatcherOptions {
  * `SmartFileWatcher` adds two safety nets:
  *  1. `maxWaitMs` - hard cap on how long the callback can be delayed.
  *  2. Optional `leading` edge - fire immediately on the first notification.
+ *
+ * Hash tracking uses a key→hash map so multiple files (projects.json,
+ * metadata.json) can be tracked independently.
  */
 export class SmartFileWatcher {
-  private lastHash: string = '';
+  private lastWriteHashes = new Map<string, string>();
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private maxWaitTimer: ReturnType<typeof setTimeout> | null = null;
   private leadingFired = false;
@@ -57,14 +60,13 @@ export class SmartFileWatcher {
   }
 
   /**
-   * Write `data` via `writeFn` only if it differs from the last value.
-   * Hashing is cheap; this avoids spurious disk writes when the caller
-   * re-saves identical data.
+   * Write `data` via `writeFn` only if it differs from the last value
+   * stored under the given key.
    */
-  write(data: string, writeFn: (data: string) => void): void {
+  write(key: string, data: string, writeFn: (data: string) => void): void {
     const hash = crypto.createHash('md5').update(data).digest('hex');
-    if (hash === this.lastHash) return;
-    this.lastHash = hash;
+    if (hash === this.lastWriteHashes.get(key)) return;
+    this.lastWriteHashes.set(key, hash);
     writeFn(data);
   }
 
@@ -117,12 +119,13 @@ export class SmartFileWatcher {
   }
 
   /**
-   * Update the dedup hash without firing onChange. Useful after we have
-   * already read a file synchronously and want to skip the next event for
-   * the same content.
+   * Update the dedup hash for a given key without firing onChange. Useful
+   * after we have already written a file and want the watcher to recognise
+   * our own write so it can skip the reload.
    */
-  updateHash(data: string): void {
-    this.lastHash = crypto.createHash('md5').update(data).digest('hex');
+  updateHash(key: string, data: string): void {
+    const hash = crypto.createHash('md5').update(data).digest('hex');
+    this.lastWriteHashes.set(key, hash);
   }
 
   /**
@@ -131,6 +134,16 @@ export class SmartFileWatcher {
    */
   isPending(): boolean {
     return this.debounceTimer !== null || this.maxWaitTimer !== null;
+  }
+
+  /**
+   * Check whether the given file content matches the content we last wrote
+   * under the given key. Used by the file-watcher handler to skip an
+   * unnecessary reload when the change was caused by our own atomic write.
+   */
+  isSameAsLastWrite(key: string, content: string): boolean {
+    const hash = crypto.createHash('md5').update(content).digest('hex');
+    return hash === this.lastWriteHashes.get(key);
   }
 
   dispose(): void {

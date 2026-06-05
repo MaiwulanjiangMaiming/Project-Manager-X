@@ -56,6 +56,7 @@ interface StoredMetadata {
 
 const STORAGE_KEY = 'projectManagerPro';
 const PROJECTS_FILE = 'projects.json';
+const METADATA_FILE = 'metadata.json';
 
 const ProjectSchema = z.object({
   id: z.string(),
@@ -77,16 +78,28 @@ const ProjectsFileSchema = z.array(ProjectSchema);
 export class Storage {
   private cache: StorageData | null = null;
   private projectsFilePath: string;
+  private metadataFilePath: string;
   backupManager?: BackupManager;
+  /**
+   * Called after a data file is successfully written to disk.
+   * The key identifies which file ('projects' or 'metadata') and the
+   * content is the raw JSON string — used by SmartFileWatcher to skip
+   * self-writes.
+   */
+  onAfterWrite?: (key: string, content: string) => void;
 
   constructor(private context: vscode.ExtensionContext) {
     const configLocation = vscode.workspace
       .getConfiguration('projectManagerPro')
       .get<string>('projectsLocation', '');
     if (configLocation) {
-      this.projectsFilePath = path.join(expandHomePath(configLocation), PROJECTS_FILE);
+      const base = expandHomePath(configLocation);
+      this.projectsFilePath = path.join(base, PROJECTS_FILE);
+      this.metadataFilePath = path.join(base, METADATA_FILE);
     } else {
-      this.projectsFilePath = path.join(getAppDataDir(), PROJECTS_FILE);
+      const base = getAppDataDir();
+      this.projectsFilePath = path.join(base, PROJECTS_FILE);
+      this.metadataFilePath = path.join(base, METADATA_FILE);
     }
   }
 
@@ -97,6 +110,12 @@ export class Storage {
   getProjectsFilePath(): string {
     return this.projectsFilePath;
   }
+
+  getMetadataFilePath(): string {
+    return this.metadataFilePath;
+  }
+
+  // ─── Projects file ──────────────────────────────────────────────
 
   private loadProjectsFromFile(): Project[] {
     if (!fs.existsSync(this.projectsFilePath)) {
@@ -127,22 +146,96 @@ export class Storage {
         health: item.health,
       }));
     } catch {
-      // Partial-write window: another IDE may be mid-write. The watcher in
-      // extension.ts will call this again on the next tick, so we keep the
-      // previous in-memory cache (do not invalidate here) and let the next
-      // event fix the read. This avoids the "blanks out the list" symptom
-      // when IDE A is saving while IDE B is reading.
       return this.cache ? this.cache.projects : [];
     }
   }
 
+  // ─── Metadata file ──────────────────────────────────────────────
+
+  private loadMetadataFromFile(): StoredMetadata {
+    if (!fs.existsSync(this.metadataFilePath)) {
+      return {};
+    }
+    try {
+      const content = fs.readFileSync(this.metadataFilePath, 'utf-8');
+      return JSON.parse(content) as StoredMetadata;
+    } catch {
+      return this.cache
+        ? {
+            tasks: this.cache.tasks,
+            milestones: this.cache.milestones,
+            changelog: this.cache.changelog,
+            snapshots: this.cache.snapshots,
+            notes: this.cache.notes,
+            tags: this.cache.tags,
+            settings: this.cache.settings,
+            dataVersion: DATA_VERSION,
+          }
+        : {};
+    }
+  }
+
   /**
-   * Reload projects.json from disk without touching the in-memory cache.
-   * Retries a few times if the file is in a partial-write state, since
-   * non-atomic writes from other IDEs can produce invalid JSON for a few ms.
-   * The number of attempts and the delay are conservative on purpose:
-   * editors usually settle in under 200ms, but network drives can be slower.
+   * One-time migration: if metadata.json does not exist yet but the old
+   * globalState key has data, write it to metadata.json so other IDEs can
+   * read it. After a successful write the globalState key is cleared to
+   * avoid re-migrating on the next activation.
    */
+  private async migrateGlobalStateToFile(): Promise<void> {
+    if (fs.existsSync(this.metadataFilePath)) return;
+
+    const legacy = this.context.globalState.get<StoredMetadata>(STORAGE_KEY);
+    if (!legacy || Object.keys(legacy).length === 0) return;
+
+    // Only migrate if there is real user data (not just the version stamp
+    // that getDataInner writes on first activation).
+    const hasRealData =
+      (legacy.tasks && legacy.tasks.length > 0) ||
+      (legacy.milestones && legacy.milestones.length > 0) ||
+      (legacy.changelog && legacy.changelog.length > 0) ||
+      (legacy.snapshots && legacy.snapshots.length > 0) ||
+      (legacy.notes && legacy.notes.length > 0) ||
+      (legacy.tags &&
+        legacy.tags.length > 0 &&
+        legacy.tags.some((t) => t.id !== 'personal' && t.id !== 'work' && t.id !== 'learning')) ||
+      (legacy.settings && JSON.stringify(legacy.settings) !== JSON.stringify(DEFAULT_SETTINGS));
+
+    if (!hasRealData) return;
+
+    try {
+      const dir = path.dirname(this.metadataFilePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const content = JSON.stringify(
+        {
+          tasks: legacy.tasks || [],
+          milestones: legacy.milestones || [],
+          changelog: legacy.changelog || [],
+          snapshots: legacy.snapshots || [],
+          notes: legacy.notes || [],
+          tags: legacy.tags || [...DEFAULT_TAGS],
+          settings: { ...DEFAULT_SETTINGS, ...(legacy.settings || {}) },
+          dataVersion: legacy.dataVersion || DATA_VERSION,
+        },
+        null,
+        2
+      );
+      const tmpPath = `${this.metadataFilePath}.${process.pid}.${Date.now()}.tmp`;
+      await fs.promises.writeFile(tmpPath, content, 'utf-8');
+      await fs.promises.rename(tmpPath, this.metadataFilePath);
+      // Clear globalState to avoid re-migrating
+      await this.context.globalState.update(STORAGE_KEY, undefined);
+      vscode.window.showInformationMessage(
+        'Project Manager X: migrated metadata to shared file for cross-IDE sync.'
+      );
+    } catch {
+      // Non-fatal: the next activation will try again.
+    }
+  }
+
+  // ─── Force reload (with retry) ──────────────────────────────────
+
   async forceReloadProjects(options?: { attempts?: number; delayMs?: number }): Promise<Project[]> {
     const attempts = options?.attempts ?? 5;
     const delayMs = options?.delayMs ?? 50;
@@ -150,6 +243,9 @@ export class Storage {
     let lastError: unknown = null;
     for (let i = 0; i < attempts; i++) {
       if (!fs.existsSync(this.projectsFilePath)) {
+        if (this.cache) {
+          this.cache = { ...this.cache, projects: [] };
+        }
         return [];
       }
       try {
@@ -175,16 +271,20 @@ export class Storage {
           remote: item.remote,
           health: item.health,
         }));
-        this.cache = {
-          projects,
-          tasks: this.cache?.tasks ?? [],
-          milestones: this.cache?.milestones ?? [],
-          changelog: this.cache?.changelog ?? [],
-          snapshots: this.cache?.snapshots ?? [],
-          notes: this.cache?.notes ?? [],
-          tags: this.cache?.tags ?? [...DEFAULT_TAGS],
-          settings: this.cache?.settings ?? { ...DEFAULT_SETTINGS },
-        };
+        if (this.cache) {
+          this.cache.projects = projects;
+        } else {
+          this.cache = {
+            projects,
+            tasks: [],
+            milestones: [],
+            changelog: [],
+            snapshots: [],
+            notes: [],
+            tags: [...DEFAULT_TAGS],
+            settings: { ...DEFAULT_SETTINGS },
+          };
+        }
         return projects;
       } catch (e) {
         lastError = e;
@@ -201,21 +301,80 @@ export class Storage {
     return this.cache ? this.cache.projects : [];
   }
 
+  /**
+   * Force-reload metadata.json from disk (with retry). Used when the
+   * file watcher detects an external change.
+   */
+  async forceReloadMetadata(options?: { attempts?: number; delayMs?: number }): Promise<void> {
+    const attempts = options?.attempts ?? 5;
+    const delayMs = options?.delayMs ?? 50;
+
+    let lastError: unknown = null;
+    for (let i = 0; i < attempts; i++) {
+      if (!fs.existsSync(this.metadataFilePath)) {
+        if (this.cache) {
+          this.cache.tasks = [];
+          this.cache.milestones = [];
+          this.cache.changelog = [];
+          this.cache.snapshots = [];
+          this.cache.notes = [];
+          this.cache.tags = [...DEFAULT_TAGS];
+          this.cache.settings = { ...DEFAULT_SETTINGS };
+        }
+        return;
+      }
+      try {
+        const content = fs.readFileSync(this.metadataFilePath, 'utf-8');
+        const raw = JSON.parse(content) as StoredMetadata;
+        if (this.cache) {
+          this.cache.tasks = raw.tasks || [];
+          this.cache.milestones = raw.milestones || [];
+          this.cache.changelog = raw.changelog || [];
+          this.cache.snapshots = raw.snapshots || [];
+          this.cache.notes = raw.notes || [];
+          this.cache.tags = raw.tags || [...DEFAULT_TAGS];
+          this.cache.settings = { ...DEFAULT_SETTINGS, ...(raw.settings || {}) };
+        } else {
+          this.cache = {
+            projects: [],
+            tasks: raw.tasks || [],
+            milestones: raw.milestones || [],
+            changelog: raw.changelog || [],
+            snapshots: raw.snapshots || [],
+            notes: raw.notes || [],
+            tags: raw.tags || [...DEFAULT_TAGS],
+            settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) },
+          };
+        }
+        return;
+      } catch (e) {
+        lastError = e;
+        if (i < attempts - 1) {
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      }
+    }
+    vscode.window.showErrorMessage(
+      `Project Manager X: failed to read metadata.json after ${attempts} attempts. (${String(
+        lastError
+      )})`
+    );
+  }
+
+  // ─── Atomic file writes ─────────────────────────────────────────
+
   private async saveProjectsToFile(projects: Project[]): Promise<void> {
     const dir = path.dirname(this.projectsFilePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    // Atomic write: write to a sibling temp file, then rename over the target.
-    // rename() is atomic on the same filesystem, so other IDEs (or other
-    // windows of the same IDE) will only ever see the old complete file or
-    // the new complete file — never a partially-written one.
+    const content = JSON.stringify(projects, null, 2);
     const tmpPath = `${this.projectsFilePath}.${process.pid}.${Date.now()}.tmp`;
     try {
-      await fs.promises.writeFile(tmpPath, JSON.stringify(projects, null, 2), 'utf-8');
+      await fs.promises.writeFile(tmpPath, content, 'utf-8');
       await fs.promises.rename(tmpPath, this.projectsFilePath);
+      this.onAfterWrite?.('projects', content);
     } catch (e) {
-      // Best-effort cleanup of the temp file on failure.
       try {
         await fs.promises.unlink(tmpPath);
       } catch {
@@ -225,52 +384,100 @@ export class Storage {
     }
   }
 
+  private async saveMetadataToFile(metadata: StoredMetadata): Promise<void> {
+    const dir = path.dirname(this.metadataFilePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const content = JSON.stringify(metadata, null, 2);
+    const tmpPath = `${this.metadataFilePath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      await fs.promises.writeFile(tmpPath, content, 'utf-8');
+      await fs.promises.rename(tmpPath, this.metadataFilePath);
+      this.onAfterWrite?.('metadata', content);
+    } catch (e) {
+      try {
+        await fs.promises.unlink(tmpPath);
+      } catch {
+        // ignore
+      }
+      throw e;
+    }
+  }
+
+  // ─── Cache / getData ────────────────────────────────────────────
+
   private getDataInner(): StorageData {
-    const data = this.context.globalState.get<StoredMetadata>(STORAGE_KEY);
     let projects = this.loadProjectsFromFile();
 
-    const storedVersion = data?.dataVersion;
+    // On first activation, migrate legacy globalState data to metadata.json
+    // so that tags/tasks/etc. are shared across IDEs.
+    const fileMetadata = this.loadMetadataFromFile();
+    const legacyMetadata = this.context.globalState.get<StoredMetadata>(STORAGE_KEY);
+
+    // Determine which metadata source to use:
+    // 1. If metadata.json exists and has data → use it (authoritative)
+    // 2. Else if globalState has data → use it (and schedule migration)
+    // 3. Else → use defaults
+    let metadata: StoredMetadata;
+    const fileHasData =
+      (fileMetadata.tasks && fileMetadata.tasks.length > 0) ||
+      (fileMetadata.milestones && fileMetadata.milestones.length > 0) ||
+      (fileMetadata.changelog && fileMetadata.changelog.length > 0) ||
+      (fileMetadata.snapshots && fileMetadata.snapshots.length > 0) ||
+      (fileMetadata.notes && fileMetadata.notes.length > 0) ||
+      (fileMetadata.tags && fileMetadata.tags.length > 0) ||
+      fileMetadata.settings !== undefined;
+
+    if (fileHasData) {
+      metadata = fileMetadata;
+    } else if (legacyMetadata && Object.keys(legacyMetadata).length > 0) {
+      metadata = legacyMetadata;
+      // Schedule async migration — don't block the initial load
+      this.migrateGlobalStateToFile().catch(() => {});
+    } else {
+      metadata = {};
+    }
+
+    // Run migrations if needed
+    const storedVersion = metadata.dataVersion;
     if (storedVersion !== undefined && storedVersion < DATA_VERSION) {
       const migrated = runMigrations(
         {
           projects,
-          tasks: data?.tasks || [],
-          milestones: data?.milestones || [],
-          changelog: data?.changelog || [],
-          snapshots: data?.snapshots || [],
-          notes: data?.notes || [],
-          tags: data?.tags || [...DEFAULT_TAGS],
-          settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) },
+          tasks: metadata.tasks || [],
+          milestones: metadata.milestones || [],
+          changelog: metadata.changelog || [],
+          snapshots: metadata.snapshots || [],
+          notes: metadata.notes || [],
+          tags: metadata.tags || [...DEFAULT_TAGS],
+          settings: { ...DEFAULT_SETTINGS, ...(metadata.settings || {}) },
         },
         storedVersion
       );
       projects = migrated.projects;
-      this.context.globalState.update(STORAGE_KEY, {
-        ...migrated,
+      // Write migrated data to metadata.json (fire-and-forget)
+      this.saveMetadataToFile({
+        tasks: migrated.tasks,
+        milestones: migrated.milestones,
+        changelog: migrated.changelog,
+        snapshots: migrated.snapshots,
+        notes: migrated.notes,
+        tags: migrated.tags,
+        settings: migrated.settings,
         dataVersion: DATA_VERSION,
-      });
-    } else if (storedVersion === undefined) {
-      this.context.globalState.update(STORAGE_KEY, {
-        tasks: data?.tasks || [],
-        milestones: data?.milestones || [],
-        changelog: data?.changelog || [],
-        snapshots: data?.snapshots || [],
-        notes: data?.notes || [],
-        tags: data?.tags || [...DEFAULT_TAGS],
-        settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) },
-        dataVersion: DATA_VERSION,
-      });
+      }).catch(() => {});
     }
 
     return {
       projects,
-      tasks: data?.tasks || [],
-      milestones: data?.milestones || [],
-      changelog: data?.changelog || [],
-      snapshots: data?.snapshots || [],
-      notes: data?.notes || [],
-      tags: data?.tags || [...DEFAULT_TAGS],
-      settings: { ...DEFAULT_SETTINGS, ...(data?.settings || {}) },
+      tasks: metadata.tasks || [],
+      milestones: metadata.milestones || [],
+      changelog: metadata.changelog || [],
+      snapshots: metadata.snapshots || [],
+      notes: metadata.notes || [],
+      tags: metadata.tags || [...DEFAULT_TAGS],
+      settings: { ...DEFAULT_SETTINGS, ...(metadata.settings || {}) },
     };
   }
 
@@ -285,9 +492,11 @@ export class Storage {
     this.cache = null;
   }
 
+  // ─── Save operations ────────────────────────────────────────────
+
   private async saveMetadata(data: StorageData): Promise<void> {
     this.cache = data;
-    await this.context.globalState.update(STORAGE_KEY, {
+    await this.saveMetadataToFile({
       tasks: data.tasks,
       milestones: data.milestones,
       changelog: data.changelog,
@@ -316,7 +525,6 @@ export class Storage {
     if (this.cache) {
       this.cache.projects = projects;
     }
-    await this.saveMetadata(this.getData());
   }
 
   getTasks(): Task[] {

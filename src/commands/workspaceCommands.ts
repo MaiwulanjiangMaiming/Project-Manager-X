@@ -36,6 +36,7 @@ export function registerWorkspaceCommands(
           .filter((t) => t.status !== 'done' && t.status !== 'cancelled').length;
         container.statusBar.update(matched, openTasks);
         vscode.window.setStatusBarMessage(`Matched: ${matched.name}`, 3000);
+        container.onRefreshNeeded?.();
       }
     }),
 
@@ -68,6 +69,11 @@ export function registerWorkspaceCommands(
         const success = await container.backupManager.restore(selected.fullPath);
         if (success) {
           container.projectManager.invalidateCache();
+          await Promise.all([
+            container.projectManager.forceReloadProjects(),
+            container.projectManager.forceReloadMetadata(),
+          ]);
+          container.onRefreshNeeded?.();
           vscode.window.showInformationMessage('Backup restored successfully');
         } else {
           vscode.window.showErrorMessage('Failed to restore backup');

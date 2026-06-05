@@ -55,6 +55,10 @@ export class ProjectManager {
     return this.storage.getProjectsFilePath();
   }
 
+  getMetadataFilePath(): string {
+    return this.storage.getMetadataFilePath();
+  }
+
   invalidateCache(): void {
     this.storage.invalidateCache();
   }
@@ -68,6 +72,14 @@ export class ProjectManager {
    */
   async forceReloadProjects(): Promise<Project[]> {
     return this.storage.forceReloadProjects();
+  }
+
+  /**
+   * Force a re-read of metadata.json from disk (with retry). Used when
+   * the file watcher detects an external change to tags/tasks/etc.
+   */
+  async forceReloadMetadata(): Promise<void> {
+    return this.storage.forceReloadMetadata();
   }
 
   getStorageData(): any {
@@ -665,10 +677,11 @@ export class ProjectManager {
   }
 
   async refreshProjects(): Promise<void> {
-    // Real reload: force a disk read with retry, so a partial-write window
-    // doesn't surface an empty list. The caller (extension.ts handler)
-    // pushes the result to the webview after this returns.
-    await this.storage.forceReloadProjects();
+    // Real reload: force a disk read with retry for both projects and
+    // metadata, so a partial-write window doesn't surface an empty list.
+    // The caller (extension.ts handler) pushes the result to the webview
+    // after this returns.
+    await Promise.all([this.storage.forceReloadProjects(), this.storage.forceReloadMetadata()]);
   }
 
   async addDetectFolder(): Promise<void> {
