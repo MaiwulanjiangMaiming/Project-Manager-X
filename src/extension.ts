@@ -5,6 +5,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import { Container } from './core/container';
 import { registerAllCommands } from './commands';
 import { WebviewMessage, ExtensionToWebview, Project, Task, ContextSnapshot } from './types';
@@ -61,27 +62,101 @@ export function activate(context: vscode.ExtensionContext) {
 
   const provider = new ProjectManagerWebviewProvider(context.extensionUri, container, context);
 
+  // Wire up the refresh callback so command handlers can push data to the
+  // webview without needing a direct reference to the provider.
+  container.onRefreshNeeded = () => provider.refresh();
+
+  // After we write a data file ourselves, update the SmartFileWatcher's
+  // content hash so the subsequent file-watcher event can be recognised as
+  // a self-write and skipped (avoids an unnecessary disk reload).
+  container.storage.onAfterWrite = (key: string, content: string) => {
+    container.fileWatcher.updateHash(key, content);
+  };
+
+  // ─── File watchers ───────────────────────────────────────────────
+  // projects.json watcher
   const projectsFilePath = container.projectManager.getProjectsFilePath();
-  const watcher = vscode.workspace.createFileSystemWatcher(projectsFilePath);
-  // Use the smart watcher's debounce (with maxWait safety net) for all three
-  // events. Previously each event both invalidated the cache AND triggered
-  // an immediate provider.refresh(), which on macOS FSEvents could read the
-  // file mid-write and surface an empty project list. Now we only notify the
-  // watcher, which coalesces the burst and re-reads after the file settles.
-  const onAnyChange = () => {
+  const projectsWatcher = vscode.workspace.createFileSystemWatcher(projectsFilePath);
+  const onProjectsFileChange = () => {
     container.fileWatcher.notifyChange();
   };
-  watcher.onDidChange(onAnyChange);
-  watcher.onDidCreate(onAnyChange);
-  watcher.onDidDelete(onAnyChange);
-  context.subscriptions.push(watcher);
+  projectsWatcher.onDidChange(onProjectsFileChange);
+  projectsWatcher.onDidCreate(onProjectsFileChange);
+  projectsWatcher.onDidDelete(() => {
+    setTimeout(() => {
+      if (!fs.existsSync(projectsFilePath)) {
+        container.projectManager.invalidateCache();
+        provider.refresh();
+      }
+    }, 300);
+  });
+  context.subscriptions.push(projectsWatcher);
+
+  // metadata.json watcher — tags, tasks, milestones, etc.
+  const metadataFilePath = container.projectManager.getMetadataFilePath();
+  const metadataWatcher = vscode.workspace.createFileSystemWatcher(metadataFilePath);
+  const onMetadataFileChange = () => {
+    container.fileWatcher.notifyChange();
+  };
+  metadataWatcher.onDidChange(onMetadataFileChange);
+  metadataWatcher.onDidCreate(onMetadataFileChange);
+  metadataWatcher.onDidDelete(() => {
+    setTimeout(() => {
+      if (!fs.existsSync(metadataFilePath)) {
+        container.projectManager.invalidateCache();
+        provider.refresh();
+      }
+    }, 300);
+  });
+  context.subscriptions.push(metadataWatcher);
 
   container.fileWatcher.onChange = async () => {
-    // Force-reload the projects from disk through the retry-aware path. This
-    // also tolerates brief partial-write windows if a non-atomic write is
-    // somehow still in flight (e.g. third-party IDEs that don't use the
-    // atomic temp+rename pattern).
-    await container.projectManager.forceReloadProjects();
+    // Check which file(s) changed and reload only what's needed.
+    // If the content matches what we last wrote (self-write), skip the
+    // expensive disk reload — the in-memory cache is already authoritative.
+
+    let projectsChanged = false;
+    let metadataChanged = false;
+
+    try {
+      if (fs.existsSync(projectsFilePath)) {
+        const content = fs.readFileSync(projectsFilePath, 'utf-8');
+        if (!container.fileWatcher.isSameAsLastWrite('projects', content)) {
+          projectsChanged = true;
+        }
+      } else {
+        projectsChanged = true; // file deleted
+      }
+    } catch {
+      projectsChanged = true; // assume changed if we can't read
+    }
+
+    try {
+      if (fs.existsSync(metadataFilePath)) {
+        const content = fs.readFileSync(metadataFilePath, 'utf-8');
+        if (!container.fileWatcher.isSameAsLastWrite('metadata', content)) {
+          metadataChanged = true;
+        }
+      } else {
+        metadataChanged = true; // file deleted or not yet created
+      }
+    } catch {
+      metadataChanged = true;
+    }
+
+    // Reload only the changed file(s)
+    if (projectsChanged && metadataChanged) {
+      await Promise.all([
+        container.projectManager.forceReloadProjects(),
+        container.projectManager.forceReloadMetadata(),
+      ]);
+    } else if (projectsChanged) {
+      await container.projectManager.forceReloadProjects();
+    } else if (metadataChanged) {
+      await container.projectManager.forceReloadMetadata();
+    }
+    // If neither changed (both matched our last write), just refresh the
+    // webview with the current cache.
     provider.refresh();
   };
 

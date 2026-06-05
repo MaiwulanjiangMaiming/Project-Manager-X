@@ -15,6 +15,7 @@ export function registerProjectCommands(
 
     vscode.commands.registerCommand('projectManagerPro.refreshProjects', async () => {
       await container.projectManager.refreshProjects();
+      container.onRefreshNeeded?.();
     }),
 
     vscode.commands.registerCommand(

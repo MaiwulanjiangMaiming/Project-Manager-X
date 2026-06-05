@@ -14,6 +14,8 @@ export class Container {
   readonly fileWatcher: SmartFileWatcher;
   readonly statusBar: StatusBarIntegration;
   readonly reminderSystem: ReminderSystem;
+  /** Called by command handlers to push fresh data to the webview. */
+  onRefreshNeeded?: () => void;
 
   private constructor(context: vscode.ExtensionContext) {
     this.storage = new Storage(context);

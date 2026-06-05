@@ -348,7 +348,8 @@ describe('Storage', () => {
     const data2 = storage.getData();
 
     expect(data1).toBe(data2);
-    expect(fs.readFileSync).toHaveBeenCalledTimes(1);
+    // Two readFileSync calls: one for projects.json, one for metadata.json
+    expect(fs.readFileSync).toHaveBeenCalledTimes(2);
   });
 
   it('should invalidate cache', () => {
@@ -364,7 +365,8 @@ describe('Storage', () => {
     const data2 = storage.getData();
 
     expect(data1).not.toBe(data2);
-    expect(fs.readFileSync).toHaveBeenCalledTimes(2);
+    // 4 readFileSync calls: 2 on first getData (projects + metadata), 2 on second getData
+    expect(fs.readFileSync).toHaveBeenCalledTimes(4);
   });
 
   it('should return empty array when data validation fails', () => {

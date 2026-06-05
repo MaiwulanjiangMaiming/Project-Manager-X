@@ -68,8 +68,10 @@ function createMockStorage(): Storage {
       snapshots.push(snapshot);
     }),
     getProjectsFilePath: vi.fn(() => '/mock/projects.json'),
+    getMetadataFilePath: vi.fn(() => '/mock/metadata.json'),
     invalidateCache: vi.fn(),
     forceReloadProjects: vi.fn(async () => projects),
+    forceReloadMetadata: vi.fn(async () => {}),
     getData: vi.fn(() => ({
       projects,
       tasks,
