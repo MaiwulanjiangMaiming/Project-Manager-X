@@ -10,6 +10,7 @@ interface ProjectCardProps {
   viewMode?: 'detailed' | 'compact';
   isManageMode?: boolean;
   isSelected?: boolean;
+  isCurrentWorkspace?: boolean;
   onToggleSelection?: (projectId: string) => void;
   onOpenProject: (projectId: string) => void;
   onOpenInNewWindow: (projectId: string) => void;
@@ -27,6 +28,7 @@ function ProjectCard({
   viewMode = 'detailed',
   isManageMode,
   isSelected,
+  isCurrentWorkspace,
   onToggleSelection,
   onOpenProject,
   onOpenInNewWindow,
@@ -76,7 +78,7 @@ function ProjectCard({
 
   return (
     <div
-      className={`project-card ${isRemote ? 'remote' : ''} ${isCompact ? 'compact' : ''} ${isManageMode && isSelected ? 'selected' : ''}`}
+      className={`project-card ${isRemote ? 'remote' : ''} ${isCompact ? 'compact' : ''} ${isManageMode && isSelected ? 'selected' : ''} ${project.pathExists === false ? 'path-invalid' : ''} ${isCurrentWorkspace ? 'current-workspace' : ''}`}
       onContextMenu={handleContextMenu}
       onClick={isManageMode ? handleContentClick : undefined}
     >
@@ -141,6 +143,20 @@ function ProjectCard({
               }}
             >
               {project.name}
+            </span>
+          )}
+          {project.pathExists === false && (
+            <span className="path-warning" data-tip="Project path not found on disk">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                <path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0114.082 15H1.918a1.75 1.75 0 01-1.543-2.575L6.457 1.047zM8 5a.75.75 0 00-.75.75v2.5a.75.75 0 001.5 0v-2.5A.75.75 0 008 5zm0 6a1 1 0 100-2 1 1 0 000 2z" />
+              </svg>
+            </span>
+          )}
+          {isCurrentWorkspace && (
+            <span className="current-badge" data-tip="Current workspace">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z" />
+              </svg>
             </span>
           )}
           {isCompact && projectTags.length > 0 && (

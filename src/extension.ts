@@ -7,9 +7,11 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { Container } from './core/container';
+import { getMessageHandler } from './core/messageHandlers';
 import { registerAllCommands } from './commands';
 import { WebviewMessage, ExtensionToWebview, Project, Task, ContextSnapshot } from './types';
 import { RpcError } from './webview/rpc/RpcError';
+import { initI18n, getLocale, getTranslations } from './core/i18n';
 
 interface RpcSuccessResponse {
   _rpcSuccess: true;
@@ -56,8 +58,16 @@ class MessageQueue {
 let container: Container;
 const messageQueue = new MessageQueue();
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   container = Container.init(context);
+
+  // Initialise i18n with the user's VS Code locale
+  initI18n(vscode.env.language);
+
+  // Pre-load storage data using async I/O before any sync getter is used.
+  // This ensures the cache is populated and all subsequent sync reads
+  // (getProjects, getTasks, etc.) return from memory without blocking.
+  await container.storage.init();
   container.storage.setBackupManager(container.backupManager);
 
   const provider = new ProjectManagerWebviewProvider(context.extensionUri, container, context);
@@ -171,6 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const data = container.projectManager.getStorageData();
   container.reminderSystem.refreshReminders(data.tasks);
+  container.reminderSystem.startPolling(() => container.projectManager.getStorageData().tasks);
 
   vscode.commands.executeCommand('projectManagerPro.autoMatchWorkspace');
 }
@@ -266,260 +277,17 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleMessageInner(message: WebviewMessage): Promise<unknown> {
-    const pm = this.container.projectManager;
-    switch (message.type) {
-      case 'openProject':
-        await pm.openProject(message.data.projectId, false);
-        this.refresh();
-        break;
-      case 'openInNewWindow':
-        await pm.openProject(message.data.projectId, true);
-        this.refresh();
-        break;
-      case 'saveProject': {
-        const projectName = await pm.saveCurrentProject();
-        if (projectName) {
-          vscode.window.showInformationMessage(`Project "${projectName}" saved`);
-        }
-        this.refresh();
-        break;
-      }
-      case 'deleteProject': {
-        const project = pm.getProjects().find((p) => p.id === message.data.projectId);
-        if (!project) {
-          throw RpcError.notFound('Project', message.data.projectId);
-        }
-
-        const projectData = { ...project };
-        const projectTasks = pm.getTasks(message.data.projectId);
-
-        await pm.deleteProject(message.data.projectId);
-        this.refresh();
-
-        const undo = await vscode.window.showInformationMessage(
-          `Project "${projectData.name}" deleted`,
-          'Undo'
-        );
-        if (undo === 'Undo') {
-          await pm.restoreProject(projectData, projectTasks);
-          this.refresh();
-          vscode.window.showInformationMessage(`Project "${projectData.name}" restored`);
-        }
-        break;
-      }
-      case 'updateProject':
-        await pm.updateProject(message.data.project);
-        vscode.window.showInformationMessage('Project updated');
-        this.refresh();
-        break;
-      case 'reorderProjects':
-        await pm.reorderProjects(message.data.projects);
-        vscode.window.showInformationMessage('Projects reordered');
-        this.refresh();
-        break;
-      case 'moveProjectToTag':
-        await pm.moveProjectToTag(message.data.projectId, message.data.tagId);
-        this.refresh();
-        break;
-      case 'removeProjectFromTag':
-        await pm.removeProjectFromTag(message.data.projectId, message.data.tagId);
-        this.refresh();
-        break;
-      case 'addTag':
-        await pm.addTag(message.data.name, message.data.color);
-        vscode.window.showInformationMessage(`Tag "${message.data.name}" added`);
-        this.refresh();
-        break;
-      case 'updateTag':
-        await pm.updateTag(message.data.tag);
-        vscode.window.showInformationMessage('Tag updated');
-        this.refresh();
-        break;
-      case 'deleteTag':
-        await pm.deleteTag(message.data.tagId);
-        vscode.window.showInformationMessage('Tag deleted');
-        this.refresh();
-        break;
-      case 'reorderTags':
-        await pm.reorderTags(message.data.tags);
-        this.refresh();
-        break;
-      case 'showInFolder':
-        await pm.showInFolder(message.data.projectId);
-        break;
-      case 'addToWorkspace':
-        await pm.addToWorkspace(message.data.projectId);
-        break;
-      case 'refreshProjects': {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Refreshing projects...',
-            cancellable: false,
-          },
-          async () => {
-            await pm.refreshProjects();
-          }
-        );
-        this.refresh();
-        break;
-      }
-      case 'addDetectFolder':
-        await pm.addDetectFolder();
-        break;
-      case 'editProjectsFile':
-        await pm.editProjectsFile();
-        break;
-      case 'importFromProjectManager': {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: 'Importing projects...',
-            cancellable: false,
-          },
-          async () => {
-            await pm.importFromProjectManager();
-          }
-        );
-        this.refresh();
-        break;
-      }
-      case 'createTask':
-        await pm.createTask(
-          message.data.projectId,
-          message.data.title,
-          message.data.category,
-          message.data.priority
-        );
-        vscode.window.showInformationMessage('Task created');
-        this.refresh();
-        break;
-      case 'updateTask':
-        await pm.updateTask(message.data.task);
-        vscode.window.showInformationMessage('Task updated');
-        this.refresh();
-        this.container.reminderSystem.refreshReminders(pm.getStorageData().tasks);
-        break;
-      case 'deleteTask':
-        await pm.deleteTask(message.data.taskId);
-        vscode.window.showInformationMessage('Task deleted');
-        this.refresh();
-        break;
-      case 'createMilestone':
-        await pm.createMilestone(
-          message.data.projectId,
-          message.data.title,
-          message.data.description
-        );
-        vscode.window.showInformationMessage('Milestone created');
-        this.refresh();
-        break;
-      case 'updateMilestone':
-        await pm.updateMilestone(message.data.milestone);
-        this.refresh();
-        break;
-      case 'deleteMilestone':
-        await pm.deleteMilestone(message.data.milestoneId);
-        this.refresh();
-        break;
-      case 'createChangelog':
-        await pm.createChangelog(
-          message.data.projectId,
-          message.data.version,
-          message.data.changes
-        );
-        this.refresh();
-        break;
-      case 'updateChangelog':
-        await pm.updateChangelog(message.data.changelog);
-        this.refresh();
-        break;
-      case 'deleteChangelog':
-        await pm.deleteChangelog(message.data.changelogId);
-        this.refresh();
-        break;
-      case 'createNote':
-        await pm.createNote(message.data.projectId, message.data.title, message.data.content);
-        vscode.window.showInformationMessage('Note created');
-        this.refresh();
-        break;
-      case 'updateNote':
-        await pm.updateNote(message.data.note);
-        this.refresh();
-        break;
-      case 'deleteNote':
-        await pm.deleteNote(message.data.noteId);
-        this.refresh();
-        break;
-      case 'saveSnapshot':
-        await pm.saveSnapshot(message.data.projectId, message.data.snapshot);
-        this.refresh();
-        break;
-      case 'getLatestSnapshot':
-        return this.handleGetLatestSnapshot(message.data.projectId);
-      case 'openProjectDetail':
-        await vscode.commands.executeCommand(
-          'projectManagerPro.openProjectDetail',
-          message.data.projectId
-        );
-        break;
-      case 'showGlobalTasks':
-        await vscode.commands.executeCommand('projectManagerPro.showGlobalTasks');
-        break;
-      case 'batchDeleteTasks':
-        await pm.batchDeleteTasks(message.data.taskIds);
-        this.refresh();
-        break;
-      case 'batchUpdateTaskStatus':
-        await pm.batchUpdateTaskStatus(message.data.taskIds, message.data.status);
-        this.refresh();
-        break;
-      case 'batchDeleteProjects': {
-        const count = message.data.projectIds?.length || 0;
-        const confirm = await vscode.window.showWarningMessage(
-          `Delete ${count} project${count !== 1 ? 's' : ''}? This cannot be undone.`,
-          { modal: true },
-          'Delete'
-        );
-        if (confirm === 'Delete') {
-          await vscode.window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              title: `Deleting ${count} project${count !== 1 ? 's' : ''}...`,
-              cancellable: false,
-            },
-            async () => {
-              await pm.batchDeleteProjects(message.data.projectIds);
-            }
-          );
-          vscode.window.showInformationMessage(`Deleted ${count} project${count !== 1 ? 's' : ''}`);
-          this.refresh();
-        }
-        break;
-      }
-      case 'openExternal':
-        if (message.data?.url) {
-          vscode.env.openExternal(vscode.Uri.parse(message.data.url));
-        }
-        break;
-      case 'quickSwitch':
-        await vscode.commands.executeCommand('projectManagerPro.quickSwitch');
-        break;
-      case 'autoMatchWorkspace':
-        await vscode.commands.executeCommand('projectManagerPro.autoMatchWorkspace');
-        break;
-      case 'exportProjects':
-        await vscode.commands.executeCommand('projectManagerPro.exportProjects');
-        break;
-      case 'restoreBackup':
-        await vscode.commands.executeCommand('projectManagerPro.restoreBackup');
-        break;
-      case 'error:report':
-        vscode.window.showErrorMessage(
-          `Webview error: ${message.data?.message || 'Unknown error'}`
-        );
-        break;
+    // Special case: getLatestSnapshot returns a value directly
+    if (message.type === 'getLatestSnapshot') {
+      return this.handleGetLatestSnapshot(message.data.projectId);
     }
+
+    const handler = getMessageHandler(message.type);
+    if (handler) {
+      return handler(message, this.container, () => this.refresh());
+    }
+
+    throw new Error(`Unknown message type: ${message.type}`);
   }
 
   private handleGetLatestSnapshot(projectId: string): {
@@ -533,10 +301,20 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
   refresh(): void {
     const data = this.container.projectManager.getStorageData();
 
+    // Check path existence for local projects
+    const projectsWithPathCheck = data.projects.map((p: any) => ({
+      ...p,
+      pathExists: p.remote ? true : fs.existsSync(p.path),
+    }));
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const currentWorkspacePath =
+      workspaceFolders && workspaceFolders.length > 0 ? workspaceFolders[0].uri.fsPath : null;
+
     messageQueue.enqueue({
       type: 'stateUpdated',
       data: {
-        projects: data.projects,
+        projects: projectsWithPathCheck,
         tasks: data.tasks,
         milestones: data.milestones,
         changelog: data.changelog,
@@ -544,13 +322,15 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
         notes: data.notes,
         tags: data.tags,
         settings: data.settings,
+        version: this.context.extension.packageJSON.version,
+        currentWorkspacePath,
+        locale: getLocale(),
+        i18n: getTranslations(),
       },
     });
 
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders && workspaceFolders.length > 0) {
-      const workspacePath = workspaceFolders[0].uri.fsPath;
-      const matched = data.projects.find((p: Project) => p.path === workspacePath);
+    if (currentWorkspacePath) {
+      const matched = data.projects.find((p: Project) => p.path === currentWorkspacePath);
       if (matched) {
         const openTasks = data.tasks.filter(
           (t: Task) => t.projectId === matched.id && t.status !== 'done' && t.status !== 'cancelled'
@@ -572,7 +352,7 @@ class ProjectManagerWebviewProvider implements vscode.WebviewViewProvider {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline' /* required: CSS injected via JS at build time */; img-src https: data:; connect-src https:; font-src https:;">
   <title>Project Manager X</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }

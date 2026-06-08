@@ -284,6 +284,7 @@ export default function ProjectDetail({
             completionRate={completionRate}
             latestSnapshot={latestSnapshot}
             lifecycleColor={lifecycleColor}
+            onUpdateProject={onUpdateProject}
           />
         )}
         {activeTab === 'tasks' && (
@@ -334,13 +335,17 @@ function OverviewTab({
   completionRate,
   latestSnapshot,
   lifecycleColor,
+  onUpdateProject,
 }: {
   project: Project;
   tasks: Task[];
   completionRate: number;
   latestSnapshot: ContextSnapshot | null;
   lifecycleColor: string;
+  onUpdateProject: (project: Project) => void;
 }) {
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [editDescriptionValue, setEditDescriptionValue] = useState('');
   const lastActive = project.health?.lastActiveAt || project.lastOpened;
   const statusCounts = useMemo(() => {
     const counts: Partial<Record<TaskStatus, number>> = {};
@@ -413,12 +418,55 @@ function OverviewTab({
         </div>
       )}
 
-      {project.description && (
-        <div className="overview-description">
-          <h4>Description</h4>
-          <p>{project.description}</p>
-        </div>
-      )}
+      <div className="overview-description">
+        <h4>Description</h4>
+        {isEditingDescription ? (
+          <div className="description-editor">
+            <textarea
+              value={editDescriptionValue}
+              onChange={(e) => setEditDescriptionValue(e.target.value)}
+              placeholder="Add a description..."
+              autoFocus
+              rows={3}
+            />
+            <div className="description-editor-actions">
+              <button
+                className="btn-primary btn-sm"
+                onClick={() => {
+                  onUpdateProject({
+                    ...project,
+                    description: editDescriptionValue.trim() || undefined,
+                  });
+                  setIsEditingDescription(false);
+                }}
+              >
+                Save
+              </button>
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => {
+                  setIsEditingDescription(false);
+                  setEditDescriptionValue(project.description || '');
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p
+            className="description-display"
+            onClick={() => {
+              setEditDescriptionValue(project.description || '');
+              setIsEditingDescription(true);
+            }}
+          >
+            {project.description || (
+              <span className="description-placeholder">Click to add a description...</span>
+            )}
+          </p>
+        )}
+      </div>
 
       <div className="overview-status-breakdown">
         <h4>Task Breakdown</h4>

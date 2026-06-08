@@ -22,7 +22,7 @@ class WebviewRPC {
     data?: Record<string, unknown>,
     timeout = 5000
   ): Promise<T> {
-    const id = Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+    const id = Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
       this.vscode.postMessage({ type, data, _rpcId: id });

@@ -43,18 +43,30 @@ export function registerProjectCommands(
       const tasks = container.projectManager.getTasks();
 
       // 获取每个项目的 Git 分支（如果可能）
+      const gitBranchCache = new Map<string, string | undefined>();
       const getGitBranch = async (projectPath: string): Promise<string | undefined> => {
+        const cached = gitBranchCache.get(projectPath);
+        if (cached !== undefined) return cached;
+
         try {
           const gitDir = path.join(projectPath, '.git');
-          if (!fs.existsSync(gitDir)) return undefined;
-          const headFile = path.join(gitDir, 'HEAD');
-          if (!fs.existsSync(headFile)) return undefined;
-          const head = fs.readFileSync(headFile, 'utf-8').trim();
-          if (head.startsWith('ref: refs/heads/')) {
-            return head.replace('ref: refs/heads/', '');
+          const stat = await fs.promises.stat(gitDir).catch(() => null);
+          if (!stat) {
+            gitBranchCache.set(projectPath, undefined);
+            return undefined;
           }
-          return head.slice(0, 8); // detached HEAD, show commit hash
+          const headFile = path.join(gitDir, 'HEAD');
+          const head = (await fs.promises.readFile(headFile, 'utf-8')).trim();
+          let result: string | undefined;
+          if (head.startsWith('ref: refs/heads/')) {
+            result = head.replace('ref: refs/heads/', '');
+          } else {
+            result = head.slice(0, 8); // detached HEAD, show commit hash
+          }
+          gitBranchCache.set(projectPath, result);
+          return result;
         } catch {
+          gitBranchCache.set(projectPath, undefined);
           return undefined;
         }
       };
@@ -112,36 +124,90 @@ export function registerProjectCommands(
       }
 
       const tasks = container.projectManager.getTasks();
-      let markdown = '# Project Manager X - Export\n\n';
+      const format = await vscode.window.showQuickPick(
+        [
+          { label: 'Markdown', description: '.md', value: 'md' as const },
+          { label: 'JSON', description: '.json', value: 'json' as const },
+          { label: 'CSV', description: '.csv', value: 'csv' as const },
+        ],
+        { placeHolder: 'Select export format' }
+      );
 
-      for (const project of projects) {
-        markdown += `## ${project.name}\n`;
-        markdown += `- **Path**: ${project.path}\n`;
-        markdown += `- **Type**: ${project.type}\n`;
-        markdown += `- **Lifecycle**: ${project.lifecycle}\n`;
-        if (project.tags.length > 0) {
-          markdown += `- **Tags**: ${project.tags.join(', ')}\n`;
+      if (!format) return;
+
+      let content: string;
+      let defaultName: string;
+      let filters: Record<string, string[]>;
+
+      switch (format.value) {
+        case 'json': {
+          const exportData = projects.map((p) => ({
+            ...p,
+            tasks: tasks.filter((t) => t.projectId === p.id),
+          }));
+          content = JSON.stringify(exportData, null, 2);
+          defaultName = 'projects-export.json';
+          filters = { JSON: ['json'] };
+          break;
         }
-        const projectTasks = tasks.filter((t) => t.projectId === project.id);
-        if (projectTasks.length > 0) {
-          markdown += '\n### Tasks\n';
-          for (const task of projectTasks) {
-            const status =
-              task.status === 'done' ? '✅' : task.status === 'in_progress' ? '🔄' : '⬜';
-            markdown += `- ${status} ${task.title} (${task.priority})\n`;
+        case 'csv': {
+          const header = 'Project Name,Path,Type,Tags,Task Title,Task Status,Task Priority';
+          const rows: string[] = [header];
+          for (const project of projects) {
+            const projectTasks = tasks.filter((t) => t.projectId === project.id);
+            if (projectTasks.length === 0) {
+              rows.push(
+                `"${project.name}","${project.path}","${project.type}","${project.tags.join('; ')}","","",""`
+              );
+            } else {
+              for (const task of projectTasks) {
+                rows.push(
+                  `"${project.name}","${project.path}","${project.type}","${project.tags.join('; ')}","${task.title}","${task.status}","${task.priority}"`
+                );
+              }
+            }
           }
+          content = rows.join('\n');
+          defaultName = 'projects-export.csv';
+          filters = { CSV: ['csv'] };
+          break;
         }
-        markdown += '\n';
+        default: {
+          let markdown = '# Project Manager X - Export\n\n';
+          for (const project of projects) {
+            markdown += `## ${project.name}\n`;
+            markdown += `- **Path**: ${project.path}\n`;
+            markdown += `- **Type**: ${project.type}\n`;
+            markdown += `- **Lifecycle**: ${project.lifecycle}\n`;
+            if (project.tags.length > 0) {
+              markdown += `- **Tags**: ${project.tags.join(', ')}\n`;
+            }
+            const projectTasks = tasks.filter((t) => t.projectId === project.id);
+            if (projectTasks.length > 0) {
+              markdown += '\n### Tasks\n';
+              for (const task of projectTasks) {
+                const status =
+                  task.status === 'done' ? '✅' : task.status === 'in_progress' ? '🔄' : '⬜';
+                markdown += `- ${status} ${task.title} (${task.priority})\n`;
+              }
+            }
+            markdown += '\n';
+          }
+          content = markdown;
+          defaultName = 'projects-export.md';
+          filters = { Markdown: ['md'] };
+          break;
+        }
       }
 
       const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file('projects-export.md'),
-        filters: { Markdown: ['md'] },
+        defaultUri: vscode.Uri.file(defaultName),
+        filters,
       });
 
       if (uri) {
         const fs = await import('fs');
-        fs.writeFileSync(uri.fsPath, markdown, 'utf-8');
+        fs.writeFileSync(uri.fsPath, content, 'utf-8');
         vscode.window.showInformationMessage(`Projects exported to ${uri.fsPath}`);
       }
     }),

@@ -8,20 +8,36 @@ const gunzipAsync = promisify(zlib.gunzip);
 
 export class BackupManager {
   private static MAX_BACKUPS = 10;
+  private metadataPath: string | undefined;
 
-  constructor(private dataPath: string) {}
+  constructor(
+    private dataPath: string,
+    metadataPath?: string
+  ) {
+    this.metadataPath = metadataPath;
+  }
 
   async backup(): Promise<string | null> {
-    if (!fs.existsSync(this.dataPath)) return null;
-
-    const dir = path.dirname(this.dataPath);
-    const ext = path.extname(this.dataPath);
-    const base = path.basename(this.dataPath, ext);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+    const mainBackup = await this.backupFile(this.dataPath, timestamp);
+    if (this.metadataPath) {
+      await this.backupFile(this.metadataPath, timestamp);
+    }
+
+    return mainBackup;
+  }
+
+  private async backupFile(filePath: string, timestamp: string): Promise<string | null> {
+    if (!fs.existsSync(filePath)) return null;
+
+    const dir = path.dirname(filePath);
+    const ext = path.extname(filePath);
+    const base = path.basename(filePath, ext);
     const backupPath = path.join(dir, `${base}.backup-${timestamp}${ext}.gz`);
 
     try {
-      const data = await fs.promises.readFile(this.dataPath, 'utf-8');
+      const data = await fs.promises.readFile(filePath, 'utf-8');
       const compressed = (await gzipAsync(data)) as Buffer;
       await fs.promises.writeFile(backupPath, compressed);
       await this.pruneOldBackups(dir, base, ext);
@@ -33,17 +49,61 @@ export class BackupManager {
 
   async restore(backupPath: string): Promise<boolean> {
     try {
+      // Restore the main file (projects.json)
+      const mainOk = await this.restoreFile(this.dataPath, backupPath);
+      if (!mainOk) return false;
+
+      // Try to restore the matching metadata backup
+      if (this.metadataPath) {
+        const metadataBackupPath = this.findMatchingBackup(backupPath, this.metadataPath);
+        if (metadataBackupPath) {
+          await this.restoreFile(this.metadataPath, metadataBackupPath);
+        }
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async restoreFile(targetPath: string, backupPath: string): Promise<boolean> {
+    try {
       if (backupPath.endsWith('.gz')) {
         const compressed = await fs.promises.readFile(backupPath);
         const data = (await gunzipAsync(compressed)) as Buffer;
-        await fs.promises.writeFile(this.dataPath, data);
+        await fs.promises.writeFile(targetPath, data);
       } else {
-        await fs.promises.copyFile(backupPath, this.dataPath);
+        await fs.promises.copyFile(backupPath, targetPath);
       }
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Given a backup path for one file, find the backup with the same
+   * timestamp for a different file (e.g. projects.json → metadata.json).
+   */
+  private findMatchingBackup(sourceBackupPath: string, targetFilePath: string): string | null {
+    const dir = path.dirname(sourceBackupPath);
+    const filename = path.basename(sourceBackupPath);
+
+    // Extract the timestamp from the source backup filename
+    const timestampMatch = filename.match(/\.backup-([^.]+)/);
+    if (!timestampMatch) return null;
+
+    const timestamp = timestampMatch[1];
+    const targetExt = path.extname(targetFilePath);
+    const targetBase = path.basename(targetFilePath, targetExt);
+    const expectedName = `${targetBase}.backup-${timestamp}${targetExt}.gz`;
+    const expectedPath = path.join(dir, expectedName);
+
+    if (fs.existsSync(expectedPath)) {
+      return expectedPath;
+    }
+    return null;
   }
 
   async listBackups(): Promise<string[]> {

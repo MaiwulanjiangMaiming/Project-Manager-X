@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-06-08
+
+### Changed
+
+- **Async file loading** — `loadProjectsFromFile` and `loadMetadataFromFile` now use `fs.promises.readFile` instead of `fs.readFileSync`; a new `async init()` method pre-loads the cache during activation so all subsequent sync getters (`getProjects`, `getTasks`, etc.) return from memory without blocking the event loop; `forceReloadProjects` and `forceReloadMetadata` also use async I/O internally
+- **Windows atomic write fix** — `atomicWriteFile` detects `EPERM`/`EEXIST`/`EACCES` errors from `rename()` (which fails on Windows when the target exists) and falls back to `copyFile` + `unlink`; both `saveProjectsToFile` and `saveMetadataToFile` share the new helper
+- **WebviewMessage discriminated union** — replaced the loose `{ type: MessageType; data?: any }` interface with a discriminated union where each `type` maps to a specific `data` shape; the handler registry is now generic so each handler receives the correctly-typed message variant with full IntelliSense support
+- **Internationalization (i18n)** — added `src/core/i18n.ts` with a lightweight key-value translation system supporting English and Chinese; all user-facing notifications in `messageHandlers.ts` and `storage.ts` now use `t('key', ...args)` instead of hardcoded strings; the webview receives `locale` and `i18n` translations via the state update so the frontend can render localized text
+
+### Added
+
+- `Storage.init()` — async method to pre-load data from disk; called during `activate()` before any sync getter is used
+- `locale` and `i18n` fields in webview state update — enables frontend localization
+
+## [1.2.2] - 2026-06-08
+
+### Fixed
+
+- **`detectProjectType` returns specific types** — projects with `package.json`, `Cargo.toml`, `go.mod`, `requirements.txt`/`pyproject.toml`/`setup.py`, or `pom.xml`/`build.gradle` are now classified as `node`, `rust`, `go`, `python`, or `java` instead of the generic `any`; new icons (🟢🦀🔷🐍☕) and labels added to `PROJECT_ICONS`
+
+### Changed
+
+- **`quickSwitch` reads Git branch asynchronously** — replaced synchronous `fs.existsSync`/`fs.readFileSync` with `fs.promises.stat`/`fs.promises.readFile` plus a short-lived local cache, preventing UI thread blocking
+- **`getLatestSnapshot` uses TTL-based cache** — a 5-second in-memory cache avoids repeated disk reads for the same project's latest snapshot
+- **`findGitRepos` scans directories in parallel** — replaced serial `for…of` loop with `Promise.all` so all subdirectories are scanned concurrently
+- **`deleteProject` delegates to storage** — the method now calls `storage.deleteProject()` directly, which performs a single-pass bulk delete instead of iterating and deleting tasks one by one
+
+## [1.2.1] - 2026-06-08
+
+### Fixed
+
+- **Undo restores all associated data** — deleting a project now saves milestones, changelog, snapshots, and notes alongside tasks; undoing restores everything, not just the project and tasks
+
+### Changed
+
+- **Drag-and-drop visual feedback** — dragged item fades to 40% opacity; drop target shows a blue indicator line above or below based on cursor position; cleanup on drag end is robust
+
+### Added
+
+- **Project description editor** — the Description section in Project Detail is now always visible and clickable; clicking opens an inline textarea to add or edit the description; empty descriptions show a "Click to add a description..." placeholder
+- **Multi-format export** — the Export command now prompts for format (Markdown, JSON, or CSV) before saving; JSON includes full project + task data; CSV provides a flat table suitable for spreadsheet import
+
+## [1.2.0] - 2026-06-08
+
+### Added
+
+- **Current workspace highlight** — the project matching the currently open workspace is visually highlighted with a green left border, subtle background tint, and a checkmark badge; remote projects are exempt
+- **Keyboard shortcuts** — `Ctrl+Alt+P` / `Cmd+Alt+P` for Quick Switch, `Ctrl+Alt+S` / `Cmd+Alt+S` for Save Current Project
+
+### Changed
+
+- **Message handler registry** — the 250-line `handleMessageInner` switch statement has been refactored into a `MessageHandler` map in `src/core/messageHandlers.ts`; each message type is now an independent, testable function
+- **`getStorageData` returns `StorageData`** — replaced `any` return type with the proper `StorageData` interface
+- **`GlobalTaskView` uses normal ESM import** — replaced dynamic `require()` with a standard `import` statement
+- **Removed `saveNote` alias** — `saveNote` was just a wrapper around `updateNote`; all callers now use `updateNote` directly
+
+## [1.1.0] - 2026-06-08
+
+### Added
+
+- **Configurable reminder advance hours** — new `projectManagerPro.reminderAdvanceHours` setting (default 24h, range 1–168h) controls how far in advance task reminders fire
+- **Reminder polling** — new `projectManagerPro.reminderIntervalMinutes` setting (default 60min, range 5–1440min) adds periodic polling so reminders survive VS Code window restarts; overdue tasks now trigger an error-level notification
+- **Project path validity detection** — projects whose local path no longer exists on disk are visually flagged with a warning icon, reduced opacity, and strikethrough path text; remote projects are exempt
+
+### Security
+
+- **CSP tightened** — added `img-src https: data:`, `connect-src https:`, and `font-src https:` to the Content Security Policy; `style-src 'unsafe-inline'` retained with comment explaining it is required for build-time CSS injection
+- **openExternal URL whitelist** — `openExternal` messages now only allow `github.com`, `github.io`, `githubusercontent.com` domains and `mailto:` scheme; other URLs are blocked with a warning
+- **Import data Zod validation** — `importFromProjectManager` now validates each imported item with a Zod schema before processing; invalid entries are skipped and reported
+- **Path traversal protection** — `projectsLocation` config is now validated to be under the user's home directory; unsafe paths fall back to default with a warning
+
+## [1.0.3] - 2026-06-08
+
+### Fixed
+
+- **ID generation now uses nanoid** — replaced `Date.now()+Math.random().substr()` with `nanoid()` for collision-resistant unique IDs; also replaced deprecated `substr` with `substring` in webviewRPC
+- **Batch operations now write to disk once** — `batchDeleteTasks`, `batchUpdateTaskStatus`, and `batchDeleteProjects` previously triggered N disk writes for N items; now they modify data in memory and write once
+- **Backup now includes metadata.json** — BackupManager previously only backed up projects.json; tags, tasks, milestones, notes, snapshots, and changelog were not included. Both files are now backed up together with matching timestamps and restored as a pair
+- **Settings panel version now reads from extension** — the version display was hardcoded as `1.0.1` and fell out of sync with package.json; it now reads the version dynamically from the extension
+
 ## [1.0.2] - 2026-06-05
 
 ### Fixed

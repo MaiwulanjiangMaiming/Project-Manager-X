@@ -9,6 +9,11 @@ export type ProjectType =
   | 'mercurial'
   | 'svn'
   | 'vscode'
+  | 'node'
+  | 'rust'
+  | 'go'
+  | 'python'
+  | 'java'
   | 'any'
   | 'ssh'
   | 'docker'
@@ -50,6 +55,8 @@ export interface Project {
     container?: string;
   };
   health?: ProjectHealth;
+  /** Computed at runtime — not persisted. True if the project path exists on disk. */
+  pathExists?: boolean;
 }
 
 export interface ProjectHealth {
@@ -206,58 +213,107 @@ export interface StorageData {
 
 export const DATA_VERSION = 3;
 
-export type MessageType =
-  | 'stateUpdated'
-  | 'openProject'
-  | 'openInNewWindow'
-  | 'saveProject'
-  | 'deleteProject'
-  | 'updateProject'
-  | 'addTag'
-  | 'updateTag'
-  | 'deleteTag'
-  | 'reorderProjects'
-  | 'reorderTags'
-  | 'showInFolder'
-  | 'addToWorkspace'
-  | 'refreshProjects'
-  | 'addDetectFolder'
-  | 'editProjectsFile'
-  | 'importFromProjectManager'
-  | 'moveProjectToTag'
-  | 'removeProjectFromTag'
-  | 'createTask'
-  | 'updateTask'
-  | 'deleteTask'
-  | 'createMilestone'
-  | 'updateMilestone'
-  | 'deleteMilestone'
-  | 'createChangelog'
-  | 'updateChangelog'
-  | 'deleteChangelog'
-  | 'createNote'
-  | 'updateNote'
-  | 'deleteNote'
-  | 'saveSnapshot'
-  | 'getLatestSnapshot'
-  | 'openProjectDetail'
-  | 'showGlobalTasks'
-  | 'batchDeleteTasks'
-  | 'batchUpdateTaskStatus'
-  | 'batchDeleteProjects'
-  | 'openExternal'
-  | 'quickSwitch'
-  | 'autoMatchWorkspace'
-  | 'exportProjects'
-  | 'restoreBackup'
-  | 'error:report'
-  | 'ready';
+// ─── Discriminated union for WebviewMessage ──────────────────────
+// Each message type maps to a specific data shape so that handlers
+// get compile-time type checking when accessing msg.data.
 
-export interface WebviewMessage {
-  type: MessageType;
-  data?: any;
-  id?: string;
+interface ProjectIdData {
+  projectId: string;
 }
+interface TagIdData {
+  tagId: string;
+}
+interface TaskIdData {
+  taskId: string;
+}
+interface MilestoneIdData {
+  milestoneId: string;
+}
+interface NoteIdData {
+  noteId: string;
+}
+
+export type WebviewMessage =
+  // Project operations
+  | { type: 'openProject'; data: ProjectIdData; id?: string }
+  | { type: 'openInNewWindow'; data: ProjectIdData; id?: string }
+  | { type: 'saveProject'; data?: undefined; id?: string }
+  | { type: 'deleteProject'; data: ProjectIdData; id?: string }
+  | { type: 'updateProject'; data: { project: Project }; id?: string }
+  | { type: 'reorderProjects'; data: { projects: Project[] }; id?: string }
+  | { type: 'moveProjectToTag'; data: { projectId: string; tagId: string }; id?: string }
+  | { type: 'removeProjectFromTag'; data: { projectId: string; tagId: string }; id?: string }
+  | { type: 'showInFolder'; data: ProjectIdData; id?: string }
+  | { type: 'addToWorkspace'; data: ProjectIdData; id?: string }
+  | { type: 'refreshProjects'; data?: undefined; id?: string }
+  | { type: 'addDetectFolder'; data?: undefined; id?: string }
+  | { type: 'editProjectsFile'; data?: undefined; id?: string }
+  | { type: 'importFromProjectManager'; data?: undefined; id?: string }
+  | { type: 'openProjectDetail'; data: ProjectIdData; id?: string }
+  // Tag operations
+  | { type: 'addTag'; data: { name: string; color: string }; id?: string }
+  | { type: 'updateTag'; data: { tag: Tag }; id?: string }
+  | { type: 'deleteTag'; data: TagIdData; id?: string }
+  | { type: 'reorderTags'; data: { tags: Tag[] }; id?: string }
+  // Task operations
+  | {
+      type: 'createTask';
+      data: { projectId: string; title: string; category?: string; priority?: string };
+      id?: string;
+    }
+  | { type: 'updateTask'; data: { task: Task }; id?: string }
+  | { type: 'deleteTask'; data: TaskIdData; id?: string }
+  | { type: 'batchDeleteTasks'; data: { taskIds: string[] }; id?: string }
+  | { type: 'batchUpdateTaskStatus'; data: { taskIds: string[]; status: TaskStatus }; id?: string }
+  // Milestone operations
+  | {
+      type: 'createMilestone';
+      data: { projectId: string; title: string; description?: string; dueDate?: number };
+      id?: string;
+    }
+  | { type: 'updateMilestone'; data: { milestone: Milestone }; id?: string }
+  | { type: 'deleteMilestone'; data: MilestoneIdData; id?: string }
+  // Changelog operations
+  | {
+      type: 'createChangelog';
+      data: {
+        projectId: string;
+        version?: string;
+        added?: string[];
+        changed?: string[];
+        fixed?: string[];
+        removed?: string[];
+        notes?: string;
+      };
+      id?: string;
+    }
+  | { type: 'updateChangelog'; data: { changelog: ChangelogEntry }; id?: string }
+  | { type: 'deleteChangelog'; data: { changelogId: string }; id?: string }
+  // Note operations
+  | { type: 'createNote'; data: { projectId: string; title: string; content: string }; id?: string }
+  | { type: 'updateNote'; data: { note: Note }; id?: string }
+  | { type: 'deleteNote'; data: NoteIdData; id?: string }
+  // Snapshot operations
+  | {
+      type: 'saveSnapshot';
+      data: { projectId: string; snapshot: Partial<ContextSnapshot> };
+      id?: string;
+    }
+  | { type: 'getLatestSnapshot'; data: ProjectIdData; id?: string }
+  // Batch project operations
+  | { type: 'batchDeleteProjects'; data: { projectIds: string[] }; id?: string }
+  // Misc
+  | { type: 'openExternal'; data: { url: string }; id?: string }
+  | { type: 'quickSwitch'; data?: undefined; id?: string }
+  | { type: 'autoMatchWorkspace'; data?: undefined; id?: string }
+  | { type: 'exportProjects'; data?: undefined; id?: string }
+  | { type: 'restoreBackup'; data?: undefined; id?: string }
+  | { type: 'showGlobalTasks'; data?: undefined; id?: string }
+  | { type: 'error:report'; data: { message: string }; id?: string }
+  | { type: 'ready'; data?: undefined; id?: string };
+
+// Extract all message types for backward compatibility
+export type MessageType = WebviewMessage['type'];
 
 export interface ExtensionToWebview {
   type: 'stateUpdated' | 'rpc:response' | 'themeChange';
@@ -315,6 +371,11 @@ export const PROJECT_ICONS: Record<
   },
   svn: { icon: '🗂️', label: 'SVN Repository' },
   vscode: { icon: '💻', label: 'VS Code Workspace' },
+  node: { icon: '🟢', label: 'Node.js Project' },
+  rust: { icon: '🦀', label: 'Rust Project' },
+  go: { icon: '🔷', label: 'Go Project' },
+  python: { icon: '🐍', label: 'Python Project' },
+  java: { icon: '☕', label: 'Java Project' },
   any: { icon: '📁', label: 'Folder' },
   ssh: { icon: '🔗', label: 'SSH Remote' },
   docker: {

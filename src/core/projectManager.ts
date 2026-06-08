@@ -8,6 +8,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { nanoid } from 'nanoid';
+import { z } from 'zod';
 import { Storage } from './storage';
 import {
   Project,
@@ -19,6 +21,7 @@ import {
   ChangelogEntry,
   ContextSnapshot,
   Note,
+  StorageData,
   inferLifecycle,
 } from '../types';
 
@@ -82,7 +85,11 @@ export class ProjectManager {
     return this.storage.forceReloadMetadata();
   }
 
-  getStorageData(): any {
+  getStorage(): Storage {
+    return this.storage;
+  }
+
+  getStorageData(): StorageData {
     return this.storage.getData();
   }
 
@@ -170,7 +177,7 @@ export class ProjectManager {
     }
 
     const project: Project = {
-      id: `proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `proj-${nanoid()}`,
       name,
       path: rootPath,
       tags: [],
@@ -186,17 +193,8 @@ export class ProjectManager {
   }
 
   async deleteProject(projectId: string): Promise<void> {
-    const projects = this.getProjects();
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return;
-
-    const tasks = this.getTasks().filter((t) => t.projectId === projectId);
-    for (const task of tasks) {
-      await this.storage.deleteTask(task.id);
-    }
-
-    const updated = projects.filter((p) => p.id !== projectId);
-    await this.storage.saveProjects(updated);
+    // Use storage's bulk delete which filters all associated data in one pass
+    await this.storage.deleteProject(projectId);
   }
 
   async updateProject(project: Project): Promise<void> {
@@ -234,7 +232,7 @@ export class ProjectManager {
 
   async addTag(name: string, color: string): Promise<void> {
     const tag: Tag = {
-      id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `tag-${nanoid()}`,
       name,
       color,
       order: this.getTags().length,
@@ -295,7 +293,7 @@ export class ProjectManager {
   ): Promise<void> {
     if (typeof titleOrTask === 'string') {
       const newTask: Task = {
-        id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `task-${nanoid()}`,
         projectId,
         title: titleOrTask,
         description: '',
@@ -309,7 +307,7 @@ export class ProjectManager {
       await this.storage.addTask(newTask);
     } else {
       const newTask: Task = {
-        id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `task-${nanoid()}`,
         projectId,
         title: titleOrTask.title || 'New Task',
         description: titleOrTask.description || '',
@@ -342,7 +340,7 @@ export class ProjectManager {
   ): Promise<void> {
     if (typeof milestoneOrProjectId === 'string') {
       const milestone: Milestone = {
-        id: `milestone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `milestone-${nanoid()}`,
         projectId: milestoneOrProjectId,
         title: title || '',
         description: description || '',
@@ -373,7 +371,7 @@ export class ProjectManager {
 
   async createChangelog(projectId: string, version: string, changes: string): Promise<void> {
     const entry: ChangelogEntry = {
-      id: `changelog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `changelog-${nanoid()}`,
       projectId,
       version,
       date: Date.now(),
@@ -393,7 +391,7 @@ export class ProjectManager {
 
   async createNote(projectId: string, title: string, content: string): Promise<void> {
     const note: Note = {
-      id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `note-${nanoid()}`,
       projectId,
       title,
       content,
@@ -405,10 +403,6 @@ export class ProjectManager {
   }
 
   async updateNote(note: Note): Promise<void> {
-    await this.storage.updateNote(note);
-  }
-
-  async saveNote(note: Note): Promise<void> {
     await this.storage.updateNote(note);
   }
 
@@ -425,10 +419,23 @@ export class ProjectManager {
     await this.storage.addSnapshot(snapshot);
   }
 
+  private latestSnapshotCache = new Map<string, { snapshot: ContextSnapshot; timestamp: number }>();
+  private static SNAPSHOT_CACHE_TTL = 5000; // 5 seconds
+
   getLatestSnapshot(projectId: string): ContextSnapshot | undefined {
+    const cached = this.latestSnapshotCache.get(projectId);
+    if (cached && Date.now() - cached.timestamp < ProjectManager.SNAPSHOT_CACHE_TTL) {
+      return cached.snapshot;
+    }
+
     const snapshots = this.storage.getSnapshots().filter((s) => s.projectId === projectId);
-    if (snapshots.length === 0) return undefined;
-    return snapshots.sort((a, b) => b.timestamp - a.timestamp)[0];
+    if (snapshots.length === 0) {
+      this.latestSnapshotCache.delete(projectId);
+      return undefined;
+    }
+    const latest = snapshots.sort((a, b) => b.timestamp - a.timestamp)[0];
+    this.latestSnapshotCache.set(projectId, { snapshot: latest, timestamp: Date.now() });
+    return latest;
   }
 
   async updateSettings(settings: Partial<Settings>): Promise<void> {
@@ -437,30 +444,39 @@ export class ProjectManager {
   }
 
   async batchDeleteTasks(taskIds: string[]): Promise<void> {
-    for (const id of taskIds) {
-      await this.storage.deleteTask(id);
-    }
+    const idSet = new Set(taskIds);
+    const tasks = this.storage.getTasks().filter((t) => !idSet.has(t.id));
+    await this.storage.saveTasks(tasks);
   }
 
   async batchUpdateTaskStatus(taskIds: string[], status: TaskStatus): Promise<void> {
-    const tasks = this.storage.getTasks();
-    for (const id of taskIds) {
-      const task = tasks.find((t) => t.id === id);
-      if (task) {
-        task.status = status;
-        task.updatedAt = Date.now();
-        await this.storage.updateTask(task);
-      }
-    }
+    const idSet = new Set(taskIds);
+    const tasks = this.storage
+      .getTasks()
+      .map((t) => (idSet.has(t.id) ? { ...t, status, updatedAt: Date.now() } : t));
+    await this.storage.saveTasks(tasks);
   }
 
   async batchDeleteProjects(projectIds: string[]): Promise<void> {
-    for (const id of projectIds) {
-      await this.deleteProject(id);
-    }
+    const idSet = new Set(projectIds);
+    const data = this.storage.getData();
+    data.projects = data.projects.filter((p) => !idSet.has(p.id));
+    data.tasks = data.tasks.filter((t) => !idSet.has(t.projectId));
+    data.milestones = data.milestones.filter((m) => !idSet.has(m.projectId));
+    data.changelog = data.changelog.filter((c) => !idSet.has(c.projectId));
+    data.snapshots = data.snapshots.filter((s) => !idSet.has(s.projectId));
+    data.notes = data.notes.filter((n) => !idSet.has(n.projectId));
+    await this.storage.saveData(data);
   }
 
-  async restoreProject(project: Project, tasks: Task[]): Promise<void> {
+  async restoreProject(
+    project: Project,
+    tasks: Task[],
+    milestones?: Milestone[],
+    changelog?: ChangelogEntry[],
+    snapshots?: ContextSnapshot[],
+    notes?: Note[]
+  ): Promise<void> {
     const projects = this.getProjects();
     if (!projects.some((p) => p.id === project.id)) {
       projects.push(project);
@@ -472,23 +488,58 @@ export class ProjectManager {
         await this.storage.addTask(task);
       }
     }
+    if (milestones) {
+      const existingMilestones = this.storage.getMilestones();
+      const newMilestones = milestones.filter(
+        (m) => !existingMilestones.some((e) => e.id === m.id)
+      );
+      if (newMilestones.length > 0) {
+        await this.storage.saveMilestones([...existingMilestones, ...newMilestones]);
+      }
+    }
+    if (changelog) {
+      const existingChangelog = this.storage.getChangelog();
+      const newChangelog = changelog.filter((c) => !existingChangelog.some((e) => e.id === c.id));
+      if (newChangelog.length > 0) {
+        await this.storage.saveChangelog([...existingChangelog, ...newChangelog]);
+      }
+    }
+    if (snapshots) {
+      const existingSnapshots = this.storage.getSnapshots();
+      const newSnapshots = snapshots.filter((s) => !existingSnapshots.some((e) => e.id === s.id));
+      if (newSnapshots.length > 0) {
+        await this.storage.saveSnapshots([...existingSnapshots, ...newSnapshots]);
+      }
+    }
+    if (notes) {
+      const existingNotes = this.storage.getNotes();
+      const newNotes = notes.filter((n) => !existingNotes.some((e) => e.id === n.id));
+      if (newNotes.length > 0) {
+        await this.storage.saveNotes([...existingNotes, ...newNotes]);
+      }
+    }
   }
 
   private detectProjectType(rootPath: string): Project['type'] {
     if (fs.existsSync(path.join(rootPath, '.git'))) return 'git';
-    if (fs.existsSync(path.join(rootPath, 'package.json'))) return 'any';
-    if (fs.existsSync(path.join(rootPath, 'Cargo.toml'))) return 'any';
-    if (fs.existsSync(path.join(rootPath, 'go.mod'))) return 'any';
+    if (fs.existsSync(path.join(rootPath, '.hg'))) return 'mercurial';
+    if (fs.existsSync(path.join(rootPath, '.svn'))) return 'svn';
+    if (fs.existsSync(path.join(rootPath, '.vscode'))) return 'vscode';
+    if (fs.existsSync(path.join(rootPath, 'package.json'))) return 'node';
+    if (fs.existsSync(path.join(rootPath, 'Cargo.toml'))) return 'rust';
+    if (fs.existsSync(path.join(rootPath, 'go.mod'))) return 'go';
     if (
       fs.existsSync(path.join(rootPath, 'requirements.txt')) ||
-      fs.existsSync(path.join(rootPath, 'pyproject.toml'))
+      fs.existsSync(path.join(rootPath, 'pyproject.toml')) ||
+      fs.existsSync(path.join(rootPath, 'setup.py'))
     )
-      return 'any';
+      return 'python';
     if (
       fs.existsSync(path.join(rootPath, 'pom.xml')) ||
-      fs.existsSync(path.join(rootPath, 'build.gradle'))
+      fs.existsSync(path.join(rootPath, 'build.gradle')) ||
+      fs.existsSync(path.join(rootPath, 'build.gradle.kts'))
     )
-      return 'any';
+      return 'java';
     return 'any';
   }
 
@@ -535,24 +586,24 @@ export class ProjectManager {
   ): Promise<Project[]> {
     if (currentDepth >= maxDepth) return [];
 
-    const projects: Project[] = [];
-
     if (fs.existsSync(path.join(dir, '.git'))) {
       const name = path.basename(dir);
-      projects.push({
-        id: `git-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name,
-        path: dir,
-        tags: [],
-        enabled: true,
-        type: 'git',
-        lifecycle: inferLifecycle(Date.now()),
-      });
-      return projects;
+      return [
+        {
+          id: `git-${nanoid()}`,
+          name,
+          path: dir,
+          tags: [],
+          enabled: true,
+          type: 'git',
+          lifecycle: inferLifecycle(Date.now()),
+        },
+      ];
     }
 
     try {
       const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      const subDirs: string[] = [];
       for (const entry of entries) {
         if (
           entry.isDirectory() &&
@@ -564,16 +615,16 @@ export class ProjectManager {
           entry.name !== 'out' &&
           entry.name !== '__pycache__'
         ) {
-          const subDir = path.join(dir, entry.name);
-          const subProjects = await this.findGitRepos(subDir, maxDepth, currentDepth + 1);
-          projects.push(...subProjects);
+          subDirs.push(path.join(dir, entry.name));
         }
       }
+      const results = await Promise.all(
+        subDirs.map((subDir) => this.findGitRepos(subDir, maxDepth, currentDepth + 1))
+      );
+      return results.flat();
     } catch {
-      /* ignore */
+      return [];
     }
-
-    return projects;
   }
 
   private async findVSCodeWorkspaces(
@@ -592,7 +643,7 @@ export class ProjectManager {
           const workspacePath = path.join(dir, entry.name);
           const name = entry.name.replace('.code-workspace', '');
           projects.push({
-            id: `vscode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: `vscode-${nanoid()}`,
             name,
             path: workspacePath,
             tags: [],
@@ -1001,11 +1052,25 @@ export class ProjectManager {
 
       const existing = this.getProjects();
       const candidates: Project[] = [];
+      let skippedCount = 0;
+
+      const ImportedItemSchema = z.object({
+        name: z.string().min(1),
+        rootPath: z.string().min(1),
+        enabled: z.boolean().optional(),
+        tags: z.array(z.string()).optional(),
+        groupName: z.string().optional(),
+        lastOpened: z.number().optional(),
+      });
 
       for (const item of data) {
-        if (!item.name || !item.rootPath) continue;
+        const parsed = ImportedItemSchema.safeParse(item);
+        if (!parsed.success) {
+          skippedCount++;
+          continue;
+        }
 
-        let projectPath = item.rootPath
+        let projectPath = parsed.data.rootPath
           .replace(/^~/, os.homedir())
           .replace(/^\$home/, os.homedir());
         if (existing.some((e) => e.path === projectPath)) continue;
@@ -1013,7 +1078,7 @@ export class ProjectManager {
         let projectType: Project['type'] = 'any';
         let remoteInfo: Project['remote'] = undefined;
 
-        if (item.groupName === 'Favorites') {
+        if (parsed.data.groupName === 'Favorites') {
           projectType = 'git';
         }
 
@@ -1099,24 +1164,24 @@ export class ProjectManager {
         }
 
         const project: Project = {
-          id: `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: item.name,
+          id: `imported-${nanoid()}`,
+          name: parsed.data.name,
           path: projectPath,
           tags: [],
-          enabled: item.enabled !== false,
+          enabled: parsed.data.enabled !== false,
           type: projectType,
           remote: remoteInfo,
           lifecycle: inferLifecycle(Date.now()),
-          lastOpened: item.lastOpened,
+          lastOpened: parsed.data.lastOpened,
         };
 
-        if (item.tags && Array.isArray(item.tags) && item.tags.length > 0) {
+        if (parsed.data.tags && Array.isArray(parsed.data.tags) && parsed.data.tags.length > 0) {
           const currentTags = this.getTags();
-          for (const tagName of item.tags) {
+          for (const tagName of parsed.data.tags) {
             let tag = currentTags.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
             if (!tag) {
               tag = {
-                id: `tag-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                id: `tag-${nanoid()}`,
                 name: tagName,
                 color: this.getRandomColor(),
                 order: currentTags.length,
@@ -1152,9 +1217,11 @@ export class ProjectManager {
       const imported = selected.map((s) => s.project);
       const allProjects = [...existing, ...imported];
       await this.storage.saveProjects(allProjects);
-      vscode.window.showInformationMessage(
-        `Imported ${imported.length} project${imported.length !== 1 ? 's' : ''} from ${sourceName}`
-      );
+      let msg = `Imported ${imported.length} project${imported.length !== 1 ? 's' : ''} from ${sourceName}`;
+      if (skippedCount > 0) {
+        msg += ` (${skippedCount} skipped due to invalid data)`;
+      }
+      vscode.window.showInformationMessage(msg);
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to import: ${error}`);
     }

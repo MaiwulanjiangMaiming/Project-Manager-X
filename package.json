@@ -2,7 +2,7 @@
   "name": "project-manager-x",
   "displayName": "Project Manager X Pro",
   "description": "Modern project manager with drag-and-drop, tags, and beautiful UI",
-  "version": "1.0.2",
+  "version": "1.2.3",
   "publisher": "MaiwulanjiangMaiming",
   "author": {
     "name": "Maiwulanjiang Maiming",
@@ -163,9 +163,37 @@
           "type": "boolean",
           "default": true,
           "description": "Enable task due date reminders"
+        },
+        "projectManagerPro.reminderAdvanceHours": {
+          "type": "number",
+          "default": 24,
+          "minimum": 1,
+          "maximum": 168,
+          "description": "Hours before due date to show reminder"
+        },
+        "projectManagerPro.reminderIntervalMinutes": {
+          "type": "number",
+          "default": 60,
+          "minimum": 5,
+          "maximum": 1440,
+          "description": "Minutes between reminder polling checks"
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "projectManagerPro.quickSwitch",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p",
+        "when": "!inDebugMode"
+      },
+      {
+        "command": "projectManagerPro.saveProject",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+alt+s",
+        "when": "!inDebugMode"
+      }
+    ]
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

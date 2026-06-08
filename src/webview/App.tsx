@@ -17,12 +17,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { initTooltip } from './utils/tooltip';
 import './styles/global.css';
 
-let GlobalTaskView: React.ComponentType<any> | null = null;
-try {
-  GlobalTaskView = require('./components/GlobalTaskView').default;
-} catch {
-  GlobalTaskView = null;
-}
+import GlobalTaskView from './components/GlobalTaskView';
 
 function debounce<T extends (...args: any[]) => any>(fn: T, ms: number): T {
   let timer: ReturnType<typeof setTimeout>;
@@ -394,36 +389,19 @@ export default function App() {
     }
 
     if (showGlobalTasks) {
-      if (GlobalTaskView) {
-        return (
-          <GlobalTaskView
-            tasks={tasks}
-            projects={projects}
-            tags={tags}
-            onCreateTask={handleCreateTask}
-            onUpdateTask={handleUpdateTask}
-            onDeleteTask={handleDeleteTask}
-            onBatchDeleteTasks={handleBatchDeleteTasks}
-            onBatchUpdateTaskStatus={handleBatchUpdateTaskStatus}
-            onOpenProjectDetail={handleOpenProjectDetail}
-            onBack={handleBackToList}
-          />
-        );
-      }
       return (
-        <div className="app">
-          <div className="app-header">
-            <button className="btn-secondary" onClick={handleBackToList}>
-              ← Back to Projects
-            </button>
-          </div>
-          <div className="app-content">
-            <div className="empty-state">
-              <p className="empty-title">Global Tasks</p>
-              <p className="empty-subtitle">GlobalTaskView component is not available yet.</p>
-            </div>
-          </div>
-        </div>
+        <GlobalTaskView
+          tasks={tasks}
+          projects={projects}
+          onCreateTask={(projectId, title, category, priority) =>
+            handleCreateTask(projectId, { title, category, priority } as any)
+          }
+          onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask}
+          onBatchDeleteTasks={handleBatchDeleteTasks}
+          onBatchUpdateTaskStatus={handleBatchUpdateTaskStatus}
+          onBack={handleBackToList}
+        />
       );
     }
 
@@ -568,6 +546,7 @@ export default function App() {
               viewMode={viewMode}
               isManageMode={isManageMode}
               selectedProjectIds={selectedProjectIds}
+              currentWorkspacePath={useProjectStore.getState().currentWorkspacePath}
               onToggleProjectSelection={toggleProjectSelection}
               onOpenProject={handleOpenProject}
               onOpenInNewWindow={handleOpenInNewWindow}
@@ -611,7 +590,9 @@ export default function App() {
                 <div className="settings-panel-body">
                   <div className="settings-item">
                     <span className="settings-label">Version</span>
-                    <span className="settings-value">1.0.1</span>
+                    <span className="settings-value">
+                      {useProjectStore.getState().version || '—'}
+                    </span>
                   </div>
                   <div className="settings-item">
                     <span className="settings-label">GitHub</span>

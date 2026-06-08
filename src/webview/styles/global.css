@@ -768,6 +768,20 @@ body {
   cursor: grabbing;
 }
 
+.project-item.dragging {
+  opacity: 0.4;
+}
+
+.project-item.drop-above {
+  border-top: 2px solid var(--vscode-focusBorder) !important;
+  padding-top: 0;
+}
+
+.project-item.drop-below {
+  border-bottom: 2px solid var(--vscode-focusBorder) !important;
+  padding-bottom: 0;
+}
+
 /* Project Card */
 .project-card {
   display: flex;
@@ -881,6 +895,40 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   user-select: none;
+}
+
+.path-warning {
+  color: var(--vscode-notificationsWarningIcon-foreground, #cca700);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.project-card.path-invalid {
+  opacity: 0.7;
+}
+
+.project-card.path-invalid .project-path {
+  text-decoration: line-through;
+  color: var(--vscode-notificationsErrorIcon-foreground, #f14c4c);
+}
+
+.current-badge {
+  color: var(--vscode-terminal-ansiGreen, #4ec9b0);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.project-card.current-workspace {
+  border-left: 3px solid var(--vscode-terminal-ansiGreen, #4ec9b0);
+  background: var(--vscode-list-focusBackground, rgba(78, 201, 176, 0.08));
+}
+
+.project-card.current-workspace .project-card-header {
+  padding-left: 1px;
 }
 
 .project-name-input {
@@ -1739,6 +1787,47 @@ body {
   color: var(--text-primary);
   line-height: 1.5;
   margin: 0;
+}
+
+.description-display {
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.description-display:hover {
+  background-color: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.1));
+}
+
+.description-placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.description-editor textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px solid var(--vscode-input-border, #3c3c3c);
+  border-radius: 4px;
+  background: var(--vscode-input-background, #3c3c3c);
+  color: var(--vscode-input-foreground, #cccccc);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.description-editor textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder, #007fd4);
+}
+
+.description-editor-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .breakdown-bars {

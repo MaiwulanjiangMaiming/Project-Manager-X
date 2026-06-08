@@ -22,6 +22,10 @@ interface StateUpdateData {
   notes: Note[];
   tags: Tag[];
   settings: Settings;
+  version?: string;
+  currentWorkspacePath?: string | null;
+  locale?: string;
+  i18n?: Record<string, string>;
 }
 
 interface ProjectStore {
@@ -44,6 +48,10 @@ interface ProjectStore {
 
   isManageMode: boolean;
   selectedProjectIds: Set<string>;
+  version: string;
+  currentWorkspacePath: string | null;
+  locale: string;
+  i18n: Record<string, string>;
 
   setProjects: (projects: Project[]) => void;
   setTasks: (tasks: Task[]) => void;
@@ -93,6 +101,10 @@ export const useProjectStore = create<ProjectStore>()(
     isLoading: false,
     isManageMode: false,
     selectedProjectIds: new Set<string>(),
+    version: '',
+    currentWorkspacePath: null,
+    locale: 'en',
+    i18n: {},
 
     setProjects: (projects) => set({ projects }),
     setTasks: (tasks) => set({ tasks }),
@@ -195,6 +207,13 @@ export const useProjectStore = create<ProjectStore>()(
         notes: data.notes || [],
         tags: data.tags || [],
         settings: data.settings || DEFAULT_SETTINGS,
+        version: data.version || current.version,
+        currentWorkspacePath:
+          data.currentWorkspacePath !== undefined
+            ? data.currentWorkspacePath
+            : current.currentWorkspacePath,
+        locale: data.locale || current.locale,
+        i18n: data.i18n || current.i18n,
         selectedProjectId: nextSelectedProjectId,
         searchQuery: current.searchQuery,
         selectedTag: current.selectedTag,

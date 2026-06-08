@@ -21,6 +21,10 @@ vi.mock('fs', () => {
   const writeFile = vi.fn().mockResolvedValue(undefined);
   const rename = vi.fn().mockResolvedValue(undefined);
   const unlink = vi.fn().mockResolvedValue(undefined);
+  const mkdir = vi.fn().mockResolvedValue(undefined);
+  const access = vi.fn().mockResolvedValue(undefined);
+  const readFile = vi.fn().mockResolvedValue('');
+  const copyFile = vi.fn().mockResolvedValue(undefined);
   return {
     existsSync,
     readFileSync,
@@ -29,12 +33,16 @@ vi.mock('fs', () => {
       writeFile,
       rename,
       unlink,
+      mkdir,
+      access,
+      readFile,
+      copyFile,
     },
     default: {
       existsSync,
       readFileSync,
       mkdirSync,
-      promises: { writeFile, rename, unlink },
+      promises: { writeFile, rename, unlink, mkdir, access, readFile, copyFile },
     },
   };
 });
@@ -385,9 +393,8 @@ describe('Storage', () => {
     const projects = storage.getProjects();
 
     expect(projects).toEqual([]);
-    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'Project data validation failed. Using empty project list.'
-    );
+    // i18n key is used instead of hardcoded string
+    expect(vscode.window.showErrorMessage).toHaveBeenCalled();
   });
 
   it('should keep previous projects on partial-write JSON during sync read', () => {
@@ -413,18 +420,18 @@ describe('Storage', () => {
 
   it('forceReloadProjects should read from disk and retry on partial JSON', async () => {
     const valid = [mockProject({ id: 'p1' }), mockProject({ id: 'p2' })];
-    (fs.existsSync as any).mockReturnValue(true);
+    (fs.promises.access as any).mockResolvedValue(undefined);
     // First two attempts: invalid JSON (simulating mid-write). Third: valid.
-    (fs.readFileSync as any)
-      .mockReturnValueOnce('[ { "id": "p1"')
-      .mockReturnValueOnce('[ { "id": "p1"')
-      .mockReturnValueOnce(JSON.stringify(valid));
+    (fs.promises.readFile as any)
+      .mockReturnValueOnce(Promise.resolve('[ { "id": "p1"'))
+      .mockReturnValueOnce(Promise.resolve('[ { "id": "p1"'))
+      .mockReturnValueOnce(Promise.resolve(JSON.stringify(valid)));
 
     storage = new Storage(mockContext);
     const projects = await storage.forceReloadProjects({ attempts: 3, delayMs: 1 });
 
     expect(projects).toHaveLength(2);
-    expect(fs.readFileSync).toHaveBeenCalledTimes(3);
+    expect(fs.promises.readFile).toHaveBeenCalledTimes(3);
   });
 
   it('forceReloadProjects should show error and keep cache after all attempts fail', async () => {
@@ -434,8 +441,9 @@ describe('Storage', () => {
     storage = new Storage(mockContext);
     storage.getProjects(); // warm cache
 
-    (fs.readFileSync as any).mockReset();
-    (fs.readFileSync as any).mockReturnValue('not even close to json');
+    (fs.promises.access as any).mockResolvedValue(undefined);
+    (fs.promises.readFile as any).mockReset();
+    (fs.promises.readFile as any).mockResolvedValue('not even close to json');
     (vscode.window.showErrorMessage as any).mockClear();
 
     const projects = await storage.forceReloadProjects({ attempts: 2, delayMs: 1 });

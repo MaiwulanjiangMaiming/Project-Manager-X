@@ -82,7 +82,13 @@ function createMockStorage(): Storage {
       changelog: [],
       notes: [],
     })),
-    saveData: vi.fn(),
+    saveData: vi.fn(async (data: any) => {
+      projects = data.projects;
+      tasks = data.tasks;
+      tags = data.tags;
+      settings = data.settings;
+      snapshots = data.snapshots;
+    }),
     getMilestones: vi.fn(() => []),
     saveMilestones: vi.fn(),
     getChangelog: vi.fn(() => []),
@@ -91,8 +97,13 @@ function createMockStorage(): Storage {
     saveNotes: vi.fn(),
     addProject: vi.fn(),
     updateProject: vi.fn(),
-    deleteProject: vi.fn(),
-    saveTasks: vi.fn(),
+    deleteProject: vi.fn(async (id: string) => {
+      projects = projects.filter((p) => p.id !== id);
+      tasks = tasks.filter((t) => t.projectId !== id);
+    }),
+    saveTasks: vi.fn(async (newTasks: Task[]) => {
+      tasks = newTasks;
+    }),
     addMilestone: vi.fn(),
     updateMilestone: vi.fn(),
     deleteMilestone: vi.fn(),

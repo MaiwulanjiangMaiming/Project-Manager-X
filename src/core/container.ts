@@ -20,7 +20,10 @@ export class Container {
   private constructor(context: vscode.ExtensionContext) {
     this.storage = new Storage(context);
     this.projectManager = new ProjectManager(context, this.storage);
-    this.backupManager = new BackupManager(this.storage.getProjectsFilePath());
+    this.backupManager = new BackupManager(
+      this.storage.getProjectsFilePath(),
+      this.storage.getMetadataFilePath()
+    );
     this.fileWatcher = new SmartFileWatcher();
     this.statusBar = new StatusBarIntegration();
     this.reminderSystem = new ReminderSystem();

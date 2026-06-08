@@ -27,6 +27,7 @@ import {
 } from '../types';
 import { runMigrations } from './migrations';
 import { BackupManager } from './backup';
+import { t } from './i18n';
 
 interface RawProject {
   id?: string;
@@ -79,6 +80,7 @@ export class Storage {
   private cache: StorageData | null = null;
   private projectsFilePath: string;
   private metadataFilePath: string;
+  private initialized = false;
   backupManager?: BackupManager;
   /**
    * Called after a data file is successfully written to disk.
@@ -94,13 +96,30 @@ export class Storage {
       .get<string>('projectsLocation', '');
     if (configLocation) {
       const base = expandHomePath(configLocation);
-      this.projectsFilePath = path.join(base, PROJECTS_FILE);
-      this.metadataFilePath = path.join(base, METADATA_FILE);
+      if (!validatePathSafety(base)) {
+        vscode.window.showWarningMessage(t('project.pathUnsafe'));
+        const defaultBase = getAppDataDir();
+        this.projectsFilePath = path.join(defaultBase, PROJECTS_FILE);
+        this.metadataFilePath = path.join(defaultBase, METADATA_FILE);
+      } else {
+        this.projectsFilePath = path.join(base, PROJECTS_FILE);
+        this.metadataFilePath = path.join(base, METADATA_FILE);
+      }
     } else {
       const base = getAppDataDir();
       this.projectsFilePath = path.join(base, PROJECTS_FILE);
       this.metadataFilePath = path.join(base, METADATA_FILE);
     }
+  }
+
+  /**
+   * Pre-load data from disk using async I/O. Must be called once during
+   * activation before any sync getter is used.
+   */
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    this.cache = await this.getDataInnerAsync();
+    this.initialized = true;
   }
 
   setBackupManager(bm: BackupManager): void {
@@ -117,18 +136,20 @@ export class Storage {
 
   // ─── Projects file ──────────────────────────────────────────────
 
-  private loadProjectsFromFile(): Project[] {
-    if (!fs.existsSync(this.projectsFilePath)) {
+  private async loadProjectsFromFileAsync(): Promise<Project[]> {
+    try {
+      await fs.promises.access(this.projectsFilePath);
+    } catch {
       return [];
     }
     try {
-      const content = fs.readFileSync(this.projectsFilePath, 'utf-8');
+      const content = await fs.promises.readFile(this.projectsFilePath, 'utf-8');
       const raw = JSON.parse(content);
       if (!Array.isArray(raw)) return [];
 
       const result = ProjectsFileSchema.safeParse(raw);
       if (!result.success) {
-        vscode.window.showErrorMessage('Project data validation failed. Using empty project list.');
+        vscode.window.showErrorMessage(t('project.validationFailed'));
         return [];
       }
 
@@ -152,12 +173,14 @@ export class Storage {
 
   // ─── Metadata file ──────────────────────────────────────────────
 
-  private loadMetadataFromFile(): StoredMetadata {
-    if (!fs.existsSync(this.metadataFilePath)) {
+  private async loadMetadataFromFileAsync(): Promise<StoredMetadata> {
+    try {
+      await fs.promises.access(this.metadataFilePath);
+    } catch {
       return {};
     }
     try {
-      const content = fs.readFileSync(this.metadataFilePath, 'utf-8');
+      const content = await fs.promises.readFile(this.metadataFilePath, 'utf-8');
       return JSON.parse(content) as StoredMetadata;
     } catch {
       return this.cache
@@ -226,9 +249,7 @@ export class Storage {
       await fs.promises.rename(tmpPath, this.metadataFilePath);
       // Clear globalState to avoid re-migrating
       await this.context.globalState.update(STORAGE_KEY, undefined);
-      vscode.window.showInformationMessage(
-        'Project Manager X: migrated metadata to shared file for cross-IDE sync.'
-      );
+      vscode.window.showInformationMessage(t('project.migrated'));
     } catch {
       // Non-fatal: the next activation will try again.
     }
@@ -242,14 +263,16 @@ export class Storage {
 
     let lastError: unknown = null;
     for (let i = 0; i < attempts; i++) {
-      if (!fs.existsSync(this.projectsFilePath)) {
+      try {
+        await fs.promises.access(this.projectsFilePath);
+      } catch {
         if (this.cache) {
           this.cache = { ...this.cache, projects: [] };
         }
         return [];
       }
       try {
-        const content = fs.readFileSync(this.projectsFilePath, 'utf-8');
+        const content = await fs.promises.readFile(this.projectsFilePath, 'utf-8');
         const raw = JSON.parse(content);
         if (!Array.isArray(raw)) {
           throw new Error('Root is not an array');
@@ -293,11 +316,7 @@ export class Storage {
         }
       }
     }
-    vscode.window.showErrorMessage(
-      `Project Manager X: failed to read projects.json after ${attempts} attempts. Keeping previous data. (${String(
-        lastError
-      )})`
-    );
+    vscode.window.showErrorMessage(t('project.readFailed', String(attempts), String(lastError)));
     return this.cache ? this.cache.projects : [];
   }
 
@@ -311,7 +330,9 @@ export class Storage {
 
     let lastError: unknown = null;
     for (let i = 0; i < attempts; i++) {
-      if (!fs.existsSync(this.metadataFilePath)) {
+      try {
+        await fs.promises.access(this.metadataFilePath);
+      } catch {
         if (this.cache) {
           this.cache.tasks = [];
           this.cache.milestones = [];
@@ -324,7 +345,7 @@ export class Storage {
         return;
       }
       try {
-        const content = fs.readFileSync(this.metadataFilePath, 'utf-8');
+        const content = await fs.promises.readFile(this.metadataFilePath, 'utf-8');
         const raw = JSON.parse(content) as StoredMetadata;
         if (this.cache) {
           this.cache.tasks = raw.tasks || [];
@@ -355,64 +376,73 @@ export class Storage {
       }
     }
     vscode.window.showErrorMessage(
-      `Project Manager X: failed to read metadata.json after ${attempts} attempts. (${String(
-        lastError
-      )})`
+      t('project.metadataReadFailed', String(attempts), String(lastError))
     );
   }
 
   // ─── Atomic file writes ─────────────────────────────────────────
 
-  private async saveProjectsToFile(projects: Project[]): Promise<void> {
-    const dir = path.dirname(this.projectsFilePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    const content = JSON.stringify(projects, null, 2);
-    const tmpPath = `${this.projectsFilePath}.${process.pid}.${Date.now()}.tmp`;
+  /**
+   * Atomically replace a file by writing to a temp file then renaming.
+   * On Windows, rename() fails if the target already exists, so we
+   * fall back to copyFile + unlink.
+   */
+  private async atomicWriteFile(targetPath: string, content: string): Promise<void> {
+    const dir = path.dirname(targetPath);
+    await fs.promises.mkdir(dir, { recursive: true });
+    const tmpPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
     try {
       await fs.promises.writeFile(tmpPath, content, 'utf-8');
-      await fs.promises.rename(tmpPath, this.projectsFilePath);
-      this.onAfterWrite?.('projects', content);
+      try {
+        await fs.promises.rename(tmpPath, targetPath);
+      } catch (renameErr: any) {
+        // On Windows, rename fails if target exists (EPERM / EEXIST).
+        // Fall back to copyFile + unlink which works cross-platform.
+        if (
+          renameErr?.code === 'EPERM' ||
+          renameErr?.code === 'EEXIST' ||
+          renameErr?.code === 'EACCES'
+        ) {
+          await fs.promises.copyFile(tmpPath, targetPath);
+          try {
+            await fs.promises.unlink(tmpPath);
+          } catch {
+            /* ignore */
+          }
+        } else {
+          throw renameErr;
+        }
+      }
     } catch (e) {
       try {
         await fs.promises.unlink(tmpPath);
       } catch {
-        // ignore
+        /* ignore */
       }
       throw e;
     }
   }
 
+  private async saveProjectsToFile(projects: Project[]): Promise<void> {
+    const content = JSON.stringify(projects, null, 2);
+    await this.atomicWriteFile(this.projectsFilePath, content);
+    this.onAfterWrite?.('projects', content);
+  }
+
   private async saveMetadataToFile(metadata: StoredMetadata): Promise<void> {
-    const dir = path.dirname(this.metadataFilePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
     const content = JSON.stringify(metadata, null, 2);
-    const tmpPath = `${this.metadataFilePath}.${process.pid}.${Date.now()}.tmp`;
-    try {
-      await fs.promises.writeFile(tmpPath, content, 'utf-8');
-      await fs.promises.rename(tmpPath, this.metadataFilePath);
-      this.onAfterWrite?.('metadata', content);
-    } catch (e) {
-      try {
-        await fs.promises.unlink(tmpPath);
-      } catch {
-        // ignore
-      }
-      throw e;
-    }
+    await this.atomicWriteFile(this.metadataFilePath, content);
+    this.onAfterWrite?.('metadata', content);
   }
 
   // ─── Cache / getData ────────────────────────────────────────────
 
-  private getDataInner(): StorageData {
-    let projects = this.loadProjectsFromFile();
+  private async getDataInnerAsync(): Promise<StorageData> {
+    let projects = await this.loadProjectsFromFileAsync();
 
     // On first activation, migrate legacy globalState data to metadata.json
     // so that tags/tasks/etc. are shared across IDEs.
-    const fileMetadata = this.loadMetadataFromFile();
+    const fileMetadata = await this.loadMetadataFromFileAsync();
     const legacyMetadata = this.context.globalState.get<StoredMetadata>(STORAGE_KEY);
 
     // Determine which metadata source to use:
@@ -482,10 +512,94 @@ export class Storage {
   }
 
   getData(): StorageData {
-    if (!this.cache) {
-      this.cache = this.getDataInner();
+    if (this.cache) {
+      return this.cache;
     }
+    // Cache is null (either not initialized or invalidated).
+    // Fall back to sync read. In normal operation, init() pre-populates
+    // the cache so this path is rarely hit.
+    this.cache = this.getDataInnerSync();
+    this.initialized = true;
     return this.cache;
+  }
+
+  /**
+   * Synchronous fallback for getData() — only used if init() was not
+   * called before a sync getter. Prefer calling init() during activation.
+   */
+  private getDataInnerSync(): StorageData {
+    let projects: Project[] = [];
+    if (fs.existsSync(this.projectsFilePath)) {
+      try {
+        const content = fs.readFileSync(this.projectsFilePath, 'utf-8');
+        const raw = JSON.parse(content);
+        if (Array.isArray(raw)) {
+          const result = ProjectsFileSchema.safeParse(raw);
+          if (result.success) {
+            projects = result.data.map((item: RawProject) => ({
+              id: item.id || Date.now().toString(),
+              name: item.name || '',
+              path: item.path || item.rootPath || '',
+              tags: item.tags || [],
+              enabled: item.enabled !== false,
+              lastOpened: item.lastOpened || 0,
+              type: (item.type || 'any') as ProjectType,
+              lifecycle: (item.lifecycle || 'active') as ProjectLifecycle,
+              lifecycleOverride: item.lifecycleOverride as ProjectLifecycle | undefined,
+              remote: item.remote,
+              health: item.health,
+            }));
+          } else {
+            vscode.window.showErrorMessage(t('project.validationFailed'));
+          }
+        }
+      } catch {
+        // keep empty
+      }
+    }
+
+    let metadata: StoredMetadata = {};
+    const fileExists = fs.existsSync(this.metadataFilePath);
+    if (fileExists) {
+      try {
+        const content = fs.readFileSync(this.metadataFilePath, 'utf-8');
+        const parsed = JSON.parse(content);
+        // Only use parsed data if it's a plain object (not an array)
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          metadata = parsed as StoredMetadata;
+        }
+      } catch {
+        // keep empty
+      }
+    }
+
+    // If metadata.json has no real data, check globalState (same logic as async version)
+    const metadataHasData =
+      (metadata.tasks && metadata.tasks.length > 0) ||
+      (metadata.milestones && metadata.milestones.length > 0) ||
+      (metadata.changelog && metadata.changelog.length > 0) ||
+      (metadata.snapshots && metadata.snapshots.length > 0) ||
+      (metadata.notes && metadata.notes.length > 0) ||
+      (metadata.tags && metadata.tags.length > 0) ||
+      metadata.settings !== undefined;
+
+    if (!metadataHasData) {
+      const legacyMetadata = this.context.globalState.get<StoredMetadata>(STORAGE_KEY);
+      if (legacyMetadata && Object.keys(legacyMetadata).length > 0) {
+        metadata = legacyMetadata;
+      }
+    }
+
+    return {
+      projects,
+      tasks: metadata.tasks || [],
+      milestones: metadata.milestones || [],
+      changelog: metadata.changelog || [],
+      snapshots: metadata.snapshots || [],
+      notes: metadata.notes || [],
+      tags: metadata.tags || [...DEFAULT_TAGS],
+      settings: { ...DEFAULT_SETTINGS, ...(metadata.settings || {}) },
+    };
   }
 
   invalidateCache(): void {
@@ -735,10 +849,24 @@ export class Storage {
 }
 
 function expandHomePath(p: string): string {
+  let expanded: string;
   if (p.startsWith('~')) {
-    return path.join(os.homedir(), p.slice(1));
+    expanded = path.join(os.homedir(), p.slice(1));
+  } else {
+    expanded = p;
   }
-  return p;
+  // Normalize and resolve to prevent path traversal
+  expanded = path.resolve(path.normalize(expanded));
+  return expanded;
+}
+
+function validatePathSafety(resolvedPath: string): boolean {
+  const home = os.homedir();
+  // Ensure the resolved path is under the user's home directory
+  if (!resolvedPath.startsWith(home)) {
+    return false;
+  }
+  return true;
 }
 
 function getAppDataDir(): string {

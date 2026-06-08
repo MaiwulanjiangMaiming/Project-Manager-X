@@ -10,6 +10,7 @@ interface ProjectListProps {
   viewMode: 'detailed' | 'compact';
   isManageMode?: boolean;
   selectedProjectIds?: Set<string>;
+  currentWorkspacePath?: string | null;
   onToggleProjectSelection?: (projectId: string) => void;
   onOpenProject: (projectId: string) => void;
   onOpenInNewWindow: (projectId: string) => void;
@@ -28,6 +29,7 @@ function ProjectList({
   viewMode,
   isManageMode,
   selectedProjectIds,
+  currentWorkspacePath,
   onToggleProjectSelection,
   onOpenProject,
   onOpenInNewWindow,
@@ -57,25 +59,39 @@ function ProjectList({
     setDraggedProject(projectId);
     e.dataTransfer.setData('project', projectId);
     e.dataTransfer.effectAllowed = 'move';
+    // Add drag ghost styling after a frame
+    window.requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-project-id="${projectId}"]`);
+      if (el) el.classList.add('dragging');
+    });
   };
 
   const handleDragOver = (e: React.DragEvent, targetProjectId: string) => {
     e.preventDefault();
     if (draggedProject && draggedProject !== targetProjectId) {
       const element = e.currentTarget as HTMLElement;
-      element.style.borderTop = '2px solid var(--vscode-focusBorder)';
+      const rect = element.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      // Show drop indicator above or below based on cursor position
+      if (e.clientY < midY) {
+        element.classList.add('drop-above');
+        element.classList.remove('drop-below');
+      } else {
+        element.classList.add('drop-below');
+        element.classList.remove('drop-above');
+      }
     }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     const element = e.currentTarget as HTMLElement;
-    element.style.borderTop = '';
+    element.classList.remove('drop-above', 'drop-below');
   };
 
   const handleDrop = (e: React.DragEvent, targetProjectId: string) => {
     e.preventDefault();
     const element = e.currentTarget as HTMLElement;
-    element.style.borderTop = '';
+    element.classList.remove('drop-above', 'drop-below');
 
     if (draggedProject && draggedProject !== targetProjectId) {
       const newProjects = [...projects];
@@ -84,10 +100,22 @@ function ProjectList({
 
       if (draggedIndex !== -1 && targetIndex !== -1) {
         const [removed] = newProjects.splice(draggedIndex, 1);
-        newProjects.splice(targetIndex, 0, removed);
+        const rect = element.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const insertIndex = e.clientY < midY ? targetIndex : targetIndex + 1;
+        newProjects.splice(insertIndex > draggedIndex ? insertIndex - 1 : insertIndex, 0, removed);
         onReorderProjects(newProjects, true);
       }
     }
+    // Clean up dragging class
+    document.querySelectorAll('.dragging').forEach((el) => el.classList.remove('dragging'));
+    setDraggedProject(null);
+  };
+
+  const handleDragEnd = () => {
+    document.querySelectorAll('.dragging, .drop-above, .drop-below').forEach((el) => {
+      el.classList.remove('dragging', 'drop-above', 'drop-below');
+    });
     setDraggedProject(null);
   };
 
@@ -101,6 +129,7 @@ function ProjectList({
       onDragOver={(e) => handleDragOver(e, project.id)}
       onDragLeave={handleDragLeave}
       onDrop={(e) => handleDrop(e, project.id)}
+      onDragEnd={handleDragEnd}
       onMouseEnter={() => setFocusedIndex(index)}
     >
       <ProjectCard
@@ -109,6 +138,7 @@ function ProjectList({
         viewMode={viewMode}
         isManageMode={isManageMode}
         isSelected={selectedProjectIds?.has(project.id) ?? false}
+        isCurrentWorkspace={currentWorkspacePath === project.path}
         onToggleSelection={onToggleProjectSelection}
         onOpenProject={onOpenProject}
         onOpenInNewWindow={onOpenInNewWindow}
